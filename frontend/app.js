@@ -5,6 +5,19 @@
 
 const API_BASE = 'https://tim-co-hoi-train-ngan-han.onrender.com';
 
+// Hàm helper định dạng số chuẩn Việt Nam (Dấu phẩy phân cách thập phân, dấu chấm phân cách hàng nghìn)
+function formatNumber(num, decimals = 2, showSign = false) {
+  if (num === null || num === undefined || isNaN(num)) return '--';
+  let formatted = Number(num).toLocaleString('vi-VN', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals
+  });
+  if (showSign && num > 0) {
+    return '+' + formatted;
+  }
+  return formatted;
+}
+
 // ===== STATE =====
 let currentTicker = '';
 let stockData = null;
@@ -159,13 +172,13 @@ function updateHeader(data) {
   const { analysis, last_date, ticker, support, resistance } = data;
   const { price, price_change, price_change_pct } = analysis;
 
-  $('header-price').textContent = price.toLocaleString('vi-VN');
+  $('header-price').textContent = formatNumber(price, 2);
   const chEl = $('header-change');
-  chEl.textContent = `${price_change >= 0 ? '+' : ''}${price_change} (${price_change_pct >= 0 ? '+' : ''}${price_change_pct}%)`;
+  chEl.textContent = `${price_change >= 0 ? '+' : ''}${formatNumber(price_change, 2)} (${price_change_pct >= 0 ? '+' : ''}${formatNumber(price_change_pct, 2)}%)`;
   chEl.className = `header-change ${price_change >= 0 ? 'positive' : 'negative'}`;
   $('header-date').textContent = last_date;
-  $('header-support').textContent = support.toLocaleString('vi-VN');
-  $('header-resistance').textContent = resistance.toLocaleString('vi-VN');
+  $('header-support').textContent = formatNumber(support, 2);
+  $('header-resistance').textContent = formatNumber(resistance, 2);
 }
 
 function setHeaderLoading() {
@@ -180,9 +193,9 @@ function updateKPIs(data) {
   const { price, price_change, price_change_pct, signals } = analysis;
 
   // Price KPI
-  $('kpi-price').textContent = price.toLocaleString('vi-VN');
+  $('kpi-price').textContent = formatNumber(price, 2);
   const changeSub = $('kpi-change-sub');
-  changeSub.textContent = `${price_change >= 0 ? '▲' : '▼'} ${Math.abs(price_change)} (${Math.abs(price_change_pct)}%)`;
+  changeSub.textContent = `${price_change >= 0 ? '▲' : '▼'} ${formatNumber(Math.abs(price_change), 2)} (${formatNumber(Math.abs(price_change_pct), 2)}%)`;
   changeSub.className = `kpi-sub ${price_change >= 0 ? 'bull' : 'bear'}`;
 
   // MACD KPI
@@ -190,7 +203,7 @@ function updateKPIs(data) {
   if (macdSig) {
     $('kpi-macd').textContent = macdSig.label || '--';
     const macdSub = $('kpi-macd-sub');
-    macdSub.textContent = `Val: ${macdSig.macd} | Sig: ${macdSig.signal_line}`;
+    macdSub.textContent = `Val: ${formatNumber(macdSig.macd, 4)} | Sig: ${formatNumber(macdSig.signal_line, 4)}`;
     macdSub.className = `kpi-sub ${macdSig.signal === 'buy' ? 'bull' : macdSig.signal === 'sell' ? 'bear' : ''}`;
   }
 
@@ -198,8 +211,8 @@ function updateKPIs(data) {
   const volSig = signals.volume;
   if (volSig) {
     const ratio = volSig.ratio || 1;
-    $('kpi-volume').textContent = (volSig.today / 1000).toFixed(0) + 'K';
-    $('kpi-volume-sub').textContent = `×${ratio} so với TB20`;
+    $('kpi-volume').textContent = formatNumber(volSig.today / 1000, 0) + 'K';
+    $('kpi-volume-sub').textContent = `×${formatNumber(ratio, 2)} so với TB20`;
     $('kpi-volume-sub').className = `kpi-sub ${ratio > 1.2 ? 'bull' : ratio < 0.7 ? 'bear' : ''}`;
   }
 
@@ -208,7 +221,7 @@ function updateKPIs(data) {
   if (maSig) {
     $('kpi-ma').textContent = maSig.label || '--';
     const maSub = $('kpi-ma-sub');
-    maSub.textContent = `MA10: ${maSig.ma10?.toLocaleString('vi-VN')} | MA50: ${maSig.ma50?.toLocaleString('vi-VN') || 'N/A'}`;
+    maSub.textContent = `MA10: ${formatNumber(maSig.ma10, 2)} | MA50: ${formatNumber(maSig.ma50, 2) || 'N/A'}`;
     maSub.className = `kpi-sub ${maSig.signal === 'buy' ? 'bull' : maSig.signal === 'sell' ? 'bear' : ''}`;
   }
 }
@@ -262,16 +275,16 @@ function updateSignals(data) {
   const macdVal = signals.macd;
   const bbVal = signals.bb;
   if (maVal) {
-    $('val-ma10').textContent = maVal.ma10?.toLocaleString('vi-VN') || '--';
-    $('val-ma50').textContent = maVal.ma50?.toLocaleString('vi-VN') || '--';
+    $('val-ma10').textContent = formatNumber(maVal.ma10, 2);
+    $('val-ma50').textContent = formatNumber(maVal.ma50, 2);
   }
   if (macdVal) {
-    $('val-macd').textContent = macdVal.macd || '--';
-    $('val-signal').textContent = macdVal.signal_line || '--';
+    $('val-macd').textContent = formatNumber(macdVal.macd, 4);
+    $('val-signal').textContent = formatNumber(macdVal.signal_line, 4);
   }
   if (bbVal) {
-    $('val-bb-upper').textContent = bbVal.upper?.toLocaleString('vi-VN') || '--';
-    $('val-bb-lower').textContent = bbVal.lower?.toLocaleString('vi-VN') || '--';
+    $('val-bb-upper').textContent = formatNumber(bbVal.upper, 2);
+    $('val-bb-lower').textContent = formatNumber(bbVal.lower, 2);
   }
 }
 
@@ -551,7 +564,7 @@ function renderRecentCandles(data) {
         <span style="width:12px;height:12px;border-radius:3px;background:${isGreen ? 'var(--green)' : 'var(--red)'};flex-shrink:0;"></span>
         <div style="flex:1;">
           <div style="font-size:12px;color:var(--text-secondary);">${c.date} — <span class="font-mono" style="color:${isGreen ? 'var(--green)' : 'var(--red)'};">${c.description}</span></div>
-          <div style="font-size:11px;color:var(--text-muted);font-family:'JetBrains Mono',monospace;">O:${c.open} H:${c.high} L:${c.low} C:${c.close} | Vol:${(c.volume/1000).toFixed(0)}K</div>
+          <div style="font-size:11px;color:var(--text-muted);font-family:'JetBrains Mono',monospace;">O:${formatNumber(c.open, 2)} H:${formatNumber(c.high, 2)} L:${formatNumber(c.low, 2)} C:${formatNumber(c.close, 2)} | Vol:${formatNumber(c.volume/1000, 0)}K</div>
         </div>
       </div>`;
   });
@@ -606,13 +619,13 @@ async function loadBacktest() {
       const wrVal = stats['win_rate_15d_dynamic'] || 0;
       const wrEl = $('bt-wr-3d');
       if (wrEl) {
-        wrEl.textContent = `${wrVal}%`;
+        wrEl.textContent = `${formatNumber(wrVal, 1)}%`;
         wrEl.className = `stat-value ${wrVal >= 55 ? 'good' : wrVal >= 45 ? 'neutral' : 'bad'}`;
       }
       const evEl1 = $('bt-ev-3d');
       if (evEl1) {
         const evVal = stats['ev_15d_dynamic'] || 0;
-        evEl1.textContent = `EV: ${evVal > 0 ? '+' : ''}${evVal}%`;
+        evEl1.textContent = `EV: ${evVal > 0 ? '+' : ''}${formatNumber(evVal, 2)}%`;
         evEl1.style.color = evVal > 0 ? 'var(--green)' : evVal < 0 ? 'var(--red)' : 'var(--text-muted)';
       }
 
@@ -621,12 +634,12 @@ async function loadBacktest() {
       const avgWin = stats['avg_win_15d_dynamic'] || 0;
       const valEl2 = $('bt-wr-5d');
       if (valEl2) {
-        valEl2.textContent = `+${avgWin}%`;
+        valEl2.textContent = `+${formatNumber(avgWin, 2)}%`;
         valEl2.className = 'stat-value good';
       }
       const subEl2 = $('bt-ev-5d');
       if (subEl2) {
-        subEl2.textContent = `Thắng: ${winCount} lệnh`;
+        subEl2.textContent = `Thắng: ${formatNumber(winCount, 0)} lệnh`;
         subEl2.style.color = 'var(--text-muted)';
       }
 
@@ -635,12 +648,12 @@ async function loadBacktest() {
       const avgLoss = stats['avg_loss_15d_dynamic'] || 0;
       const valEl3 = $('bt-wr-10d');
       if (valEl3) {
-        valEl3.textContent = `${avgLoss}%`;
+        valEl3.textContent = `${formatNumber(avgLoss, 2)}%`;
         valEl3.className = 'stat-value bad';
       }
       const subEl3 = $('bt-ev-10d');
       if (subEl3) {
-        subEl3.textContent = `Thua: ${lossCount} lệnh`;
+        subEl3.textContent = `Thua: ${formatNumber(lossCount, 0)} lệnh`;
         subEl3.style.color = 'var(--text-muted)';
       }
 
@@ -648,7 +661,7 @@ async function loadBacktest() {
       const evVal = stats['ev_15d_dynamic'] || 0;
       const valEl4 = $('bt-wr-20d');
       if (valEl4) {
-        valEl4.textContent = `${evVal > 0 ? '+' : ''}${evVal}%`;
+        valEl4.textContent = `${evVal > 0 ? '+' : ''}${formatNumber(evVal, 2)}%`;
         valEl4.className = `stat-value ${evVal > 0 ? 'good' : evVal < 0 ? 'bad' : 'neutral'}`;
       }
       const subEl4 = $('bt-ev-20d');
@@ -681,7 +694,7 @@ async function loadBacktest() {
       });
     }
 
-    $('bt-signals').textContent = data.valid_signals || 0;
+    $('bt-signals').textContent = formatNumber(data.valid_signals, 0);
 
     // Build summary text
     const mainP = strategy === 'macd_hist_bearish_surge' ? '5d' : (strategy === 'optimal_induction' ? '15d_dynamic' : '10d');
@@ -694,10 +707,10 @@ async function loadBacktest() {
     $('bt-summary-text').innerHTML = `
       <strong style="color:var(--text-primary);">${data.message}</strong><br/>
       Hiệu suất ${labelP}: 
-      Thắng: <span style="color:var(--green);">${totalWins}</span> | 
-      Thua: <span style="color:var(--red);">${totalLosses}</span> | 
-      Avg Win: <span style="color:var(--green);">+${avgW}%</span> | 
-      Avg Loss: <span style="color:var(--red);">${avgL}%</span>`;
+      Thắng: <span style="color:var(--green);">${formatNumber(totalWins, 0)}</span> | 
+      Thua: <span style="color:var(--red);">${formatNumber(totalLosses, 0)}</span> | 
+      Avg Win: <span style="color:var(--green);">+${formatNumber(avgW, 2)}%</span> | 
+      Avg Loss: <span style="color:var(--red);">${formatNumber(avgL, 2)}%</span>`;
 
     // Render Verdict Card
     if (verdictCard && data.verdict) {
@@ -749,7 +762,7 @@ async function loadBacktest() {
           resultLabel = '<span style="color:var(--text-muted);">⏳ Đang giữ</span>';
         } else {
           const isWin = resVal > 0;
-          resultLabel = `<span class="${isWin ? 'text-green' : 'text-red'}" style="font-weight:600;">${isWin ? '✅' : '❌'} ${status} (${isWin ? '+' : ''}${resVal}%)</span>`;
+          resultLabel = `<span class="${isWin ? 'text-green' : 'text-red'}" style="font-weight:600;">${isWin ? '✅' : '❌'} ${status} (${isWin ? '+' : ''}${formatNumber(resVal, 2)}%)</span>`;
         }
       } else {
         const targetPct = strategy === 'macd_hist_bearish_surge' ? r.pct_5d : r.pct_10d;
@@ -762,7 +775,7 @@ async function loadBacktest() {
         }
       }
       
-      const fmtPct = v => v == null ? '--' : `<span class="${v >= 0 ? 'win' : 'loss'}">${v >= 0 ? '+' : ''}${v}%</span>`;
+      const fmtPct = v => v == null ? '--' : `<span class="${v >= 0 ? 'win' : 'loss'}">${v >= 0 ? '+' : ''}${formatNumber(v, 2)}%</span>`;
       
       let badgeLabel = '';
       if (strategy === 'macd_hist_bearish_surge') {
@@ -778,7 +791,7 @@ async function loadBacktest() {
       tbody += `
         <tr>
           <td>${r.date}</td>
-          <td class="font-mono">${r.entry_price?.toLocaleString('vi-VN')}</td>
+          <td class="font-mono">${formatNumber(r.entry_price, 2)}</td>
           <td>${badgeLabel}</td>
           <td>${fmtPct(r.pct_3d)}</td>
           <td>${fmtPct(r.pct_5d)}</td>
@@ -1094,10 +1107,10 @@ function renderResearchHeatmap(stats) {
 
     tr.innerHTML = `
       <td style="font-weight:600; font-size:12px; color:var(--text-secondary);">${name}</td>
-      <td style="text-align:center; font-family:'JetBrains Mono',monospace; background-color:${getHeatmapBg(surgeUpPct, true)}; font-weight:700;">${surgeUpPct.toFixed(1)}%</td>
-      <td style="text-align:center; font-family:'JetBrains Mono',monospace; background-color:${getHeatmapBg(revUpPct, true)}; font-weight:800; border-left:1px solid rgba(255,255,255,0.05); border-right:1px solid rgba(255,255,255,0.05);">${revUpPct.toFixed(1)}%</td>
-      <td style="text-align:center; font-family:'JetBrains Mono',monospace; background-color:${getHeatmapBg(surgeDownPct, false)}; font-weight:700;">${surgeDownPct.toFixed(1)}%</td>
-      <td style="text-align:center; font-family:'JetBrains Mono',monospace; background-color:${getHeatmapBg(revDownPct, false)}; font-weight:800; border-left:1px solid rgba(255,255,255,0.05);">${revDownPct.toFixed(1)}%</td>
+      <td style="text-align:center; font-family:'JetBrains Mono',monospace; background-color:${getHeatmapBg(surgeUpPct, true)}; font-weight:700;">${formatNumber(surgeUpPct, 1)}%</td>
+      <td style="text-align:center; font-family:'JetBrains Mono',monospace; background-color:${getHeatmapBg(revUpPct, true)}; font-weight:800; border-left:1px solid rgba(255,255,255,0.05); border-right:1px solid rgba(255,255,255,0.05);">${formatNumber(revUpPct, 1)}%</td>
+      <td style="text-align:center; font-family:'JetBrains Mono',monospace; background-color:${getHeatmapBg(surgeDownPct, false)}; font-weight:700;">${formatNumber(surgeDownPct, 1)}%</td>
+      <td style="text-align:center; font-family:'JetBrains Mono',monospace; background-color:${getHeatmapBg(revDownPct, false)}; font-weight:800; border-left:1px solid rgba(255,255,255,0.05);">${formatNumber(revDownPct, 1)}%</td>
     `;
     tbody.appendChild(tr);
   });
@@ -1159,11 +1172,11 @@ function renderResearchEvents(results) {
       <td style="font-weight:700; color:var(--blue-bright);">${e.ticker}</td>
       <td class="${et.badgeClass}">${et.label}</td>
       <td style="font-family:'JetBrains Mono',monospace;">${e.trigger_date}</td>
-      <td style="font-family:'JetBrains Mono',monospace;">${e.price_at_trigger.toLocaleString('vi-VN')} VNĐ</td>
-      <td class="${changeColor}" style="font-family:'JetBrains Mono',monospace; font-weight:700;">${changeSign}${e.price_change_pct.toFixed(1)}%</td>
+      <td style="font-family:'JetBrains Mono',monospace;">${formatNumber(e.price_at_trigger, 2)}</td>
+      <td class="${changeColor}" style="font-family:'JetBrains Mono',monospace; font-weight:700;">${changeSign}${formatNumber(e.price_change_pct, 1)}%</td>
       <td style="font-weight:600; color:var(--text-primary);">${e.context.macd_hist_color}</td>
       <td style="color:var(--text-secondary);">${e.context.macd_hist_dir === 'tăng' ? '🟢 Tăng' : '🔴 Giảm'}</td>
-      <td style="font-family:'JetBrains Mono',monospace;">${e.context.volume_ratio}x</td>
+      <td style="font-family:'JetBrains Mono',monospace;">${formatNumber(e.context.volume_ratio, 2)}x</td>
       <td style="font-size:11.5px; color:var(--text-secondary); max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${candleText}">${candleText}</td>
     `;
     tbody.appendChild(tr);
