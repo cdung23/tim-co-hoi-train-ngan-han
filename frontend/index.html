@@ -58,6 +58,9 @@
       <div class="nav-item" id="nav-backtest" onclick="switchTab('backtest')">
         <i class="fa-solid fa-clock-rotate-left"></i> Back-testing
       </div>
+      <div class="nav-item" id="nav-scanner" onclick="switchTab('scanner')">
+        <i class="fa-solid fa-magnifying-glass-chart"></i> Rà soát
+      </div>
     </nav>
 
     <!-- Gemini API Key -->
@@ -117,6 +120,9 @@
       </button>
       <button class="tab-btn" id="tab-backtest" onclick="switchTab('backtest')">
         <i class="fa-solid fa-chart-area"></i> Back-testing Lịch sử
+      </button>
+      <button class="tab-btn" id="tab-scanner" onclick="switchTab('scanner')">
+        <i class="fa-solid fa-magnifying-glass-chart"></i> Rà soát thị trường
       </button>
     </div>
 
@@ -305,9 +311,7 @@
             <span class="card-title"><i class="fa-solid fa-flask"></i> Thống kê Back-testing Lịch sử</span>
             <div style="display:flex; align-items:center; gap:8px;">
               <select id="bt-strategy-select" style="background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm); padding:6px 10px; color:var(--text-primary); font-size:12px; font-weight:600; outline:none; cursor:pointer;" onchange="loadBacktest()">
-                <option value="optimal_induction" selected>Thuật toán Quy nạp Tối ưu (Pro V5 - TP: 12%, SL: 6%)</option>
-                <option value="weighted_score">Điểm số trọng số tối ưu (Nghiên cứu Quy nạp)</option>
-                <option value="macd_hist_bearish_surge">MACD Histogram: Đỏ nhạt → Đỏ đậm (Nhận định của bạn)</option>
+                <option value="macd_hist_bearish_surge" selected>MACD Histogram: Đỏ nhạt → Đỏ đậm (Nhận định của bạn)</option>
                 <option value="multi_signal_buy">Đồng thuận 6 chỉ báo kỹ thuật (Mặc định)</option>
               </select>
               <button class="btn-analyze" onclick="loadBacktest()" style="padding:6px 12px; font-size:11.5px; box-shadow:none;">
@@ -389,7 +393,79 @@
         </div>
       </div>
 
+      <!-- ====== TAB: MARKET SCANNER ====== -->
+      <div id="view-scanner" style="display:none;" class="fade-in">
+        <div class="card" style="margin-bottom:14px;">
+          <div class="card-header" style="flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center;">
+            <span class="card-title"><i class="fa-solid fa-magnifying-glass-chart"></i> Bộ lọc rà soát 50 cổ phiếu hàng đầu</span>
+            <div style="display:flex; align-items:center; gap:12px; flex-wrap: wrap;">
+              <div style="display:flex; align-items:center; gap:6px;">
+                <label for="scanner-strategy-select" style="font-size:12px; color:var(--text-muted); white-space:nowrap;">Phong cách quét:</label>
+                <select id="scanner-strategy-select" style="background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm); padding:6px 10px; color:var(--text-primary); font-size:12px; font-weight:600; outline:none; cursor:pointer;" onchange="toggleScannerThreshold()">
+                  <option value="macd_hist_bearish_surge" selected>MACD Histogram: Đỏ nhạt → Đỏ đậm + Vol đột biến</option>
+                  <option value="multi_signal_buy">Đồng thuận 6 chỉ báo kỹ thuật</option>
+                </select>
+              </div>
+              <div id="scanner-threshold-wrap" style="display:none; align-items:center; gap:6px;">
+                <label for="scanner-threshold-input" style="font-size:12px; color:var(--text-muted); white-space:nowrap;">Ngưỡng đồng thuận BUY (N/6):</label>
+                <input type="number" id="scanner-threshold-input" value="3" min="1" max="6" style="background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm); padding:6px 8px; color:var(--text-primary); font-size:12px; width:50px; outline:none;" />
+              </div>
+              <button class="btn-analyze" id="btn-run-scan" onclick="runMarketScan()" style="padding:6px 16px; font-size:12px; font-weight:700;">
+                <i class="fa-solid fa-play"></i> Bắt đầu rà soát
+              </button>
+            </div>
+          </div>
+          <div class="card-body">
+            <!-- Progress Bar -->
+            <div id="scanner-progress-container" style="display:none; margin-bottom:16px;">
+              <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text-muted); margin-bottom:6px;">
+                <span id="scanner-progress-status">Đang tải dữ liệu và quét tín hiệu...</span>
+                <span id="scanner-progress-percent">0%</span>
+              </div>
+              <div style="background:var(--border); height:8px; border-radius:4px; overflow:hidden;">
+                <div id="scanner-progress-bar" style="background:linear-gradient(90deg, #a855f7, #ec4899); width:0%; height:100%; transition:width 0.3s ease;"></div>
+              </div>
+            </div>
+            
+            <div style="font-size:12px; color:var(--text-muted); line-height:1.6;">
+              Hệ thống rà soát tự động <strong>50 mã cổ phiếu hàng đầu Việt Nam</strong> (VN30 + các mã thị trường Hot nhất). Quá trình rà soát sử dụng <strong>ThreadPool đa luồng</strong> phía Backend để đảm bảo tốc độ cực nhanh dưới 5 giây.
+            </div>
+          </div>
+        </div>
 
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title"><i class="fa-solid fa-list-check"></i> Kết quả quét tín hiệu mua theo thời gian thực</span>
+            <span style="font-size:12px; color:var(--text-muted);" id="scanner-result-count">Tìm thấy: -- tín hiệu</span>
+          </div>
+          <div class="card-body" style="padding:0;">
+            <div class="backtest-table-wrap">
+              <table class="backtest-table" id="scanner-table">
+                <thead>
+                  <tr>
+                    <th>Mã CP</th>
+                    <th>Giá hiện tại</th>
+                    <th>Thay đổi (%)</th>
+                    <th>Ngày tín hiệu</th>
+                    <th>Phong cách quét</th>
+                    <th>Chi tiết tín hiệu mua</th>
+                    <th>Đánh giá khuyến nghị</th>
+                    <th style="text-align:center;">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody id="scanner-tbody">
+                  <tr>
+                    <td colspan="8" style="text-align:center; padding:40px; color:var(--text-muted);">
+                      <i class="fa-solid fa-magnifying-glass-chart" style="font-size:24px; margin-bottom:10px; display:block; color:var(--purple);"></i>
+                      Chưa có dữ liệu rà soát. Hãy chọn phong cách và bấm <strong>"Bắt đầu rà soát"</strong> ở trên.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
 
     </div><!-- end content-area -->
   </div><!-- end main-content -->

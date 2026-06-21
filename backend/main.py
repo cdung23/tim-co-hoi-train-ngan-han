@@ -264,6 +264,104 @@ def get_research(tickers: str = "GEX,VIX,HPG,MBB,MWG"):
         raise HTTPException(status_code=500, detail=f"Lỗi chạy nghiên cứu: {str(e)}")
 
 
+@app.get("/api/scanner")
+def run_market_scanner(strategy: str = "multi_signal_buy", threshold: int = 3):
+    """
+    Rà soát toàn thị trường cho danh sách 50 cổ phiếu theo thời gian thực
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    
+    tickers_list = [
+        "ACB", "BCM", "BID", "BVH", "CTG", "FPT", "GAS", "GVR", "HDB", "HPG", 
+        "MBB", "MSN", "MWG", "PLX", "POW", "SAB", "SHB", "SSB", "SSI", "STB", 
+        "TCB", "TPB", "VCB", "VHM", "VIB", "VIC", "VJC", "VNM", "VPB", "VRE",
+        "GEX", "VIX", "VND", "DIG", "DXG", "CEO", "NVL", "PDR", "HSG", "NKG", 
+        "VCG", "KBC", "DGC", "PVD", "PVS", "HHV", "LCG", "ANV", "VHC", "DCM"
+    ]
+    
+    results = []
+    
+    def scan_single_ticker(ticker: str):
+        try:
+            # Tải dữ liệu 6 tháng (125 phiên) để quét cực nhanh
+            df = fetch_ohlcv(ticker, months=6)
+            if df is None or df.empty or len(df) < 10:
+                return None
+                
+            last_row = df.iloc[-1]
+            last_date_str = str(last_row['time'])[:10]
+            close_price = float(last_row['close'])
+            
+            # Tính % thay đổi phiên hôm nay so với phiên trước
+            price_change = 0.0
+            price_change_pct = 0.0
+            if len(df) >= 2:
+                prev_close = float(df.iloc[-2]['close'])
+                price_change = round(close_price - prev_close, 2)
+                price_change_pct = round((close_price - prev_close) / prev_close * 100, 2)
+            
+            # Chạy backtest để tìm tín hiệu lịch sử
+            bt_res = run_backtest(df, strategy=strategy, threshold=threshold)
+            
+            # Kiểm tra xem có tín hiệu kích hoạt vào ngày cuối cùng không
+            bt_signals = bt_res.get('results', [])
+            has_signal = False
+            signal_detail = None
+            
+            for sig in bt_signals:
+                if sig.get('date') == last_date_str:
+                    has_signal = True
+                    signal_detail = sig
+                    break
+            
+            # Dự phòng: nếu ngày kích hoạt lệch 1 phiên do múi giờ hoặc dữ liệu chưa khớp ngày hiện tại
+            if not has_signal and len(bt_signals) > 0:
+                last_sig = bt_signals[-1]
+                # Nếu tín hiệu cuối cùng cách ngày hiện tại không quá 2 ngày
+                try:
+                    sig_date = datetime.strptime(last_sig.get('date'), '%Y-%m-%d')
+                    curr_date = datetime.strptime(last_date_str, '%Y-%m-%d')
+                    if (curr_date - sig_date).days <= 2:
+                        has_signal = True
+                        signal_detail = last_sig
+                except Exception:
+                    pass
+            
+            if has_signal and signal_detail:
+                return {
+                    'ticker': ticker,
+                    'price': close_price,
+                    'price_change': price_change,
+                    'price_change_pct': price_change_pct,
+                    'date': signal_detail.get('date'),
+                    'buy_signals': signal_detail.get('buy_signals'),
+                    'rule_name': signal_detail.get('rule_name', 'Tín hiệu mua kỹ thuật'),
+                }
+        except Exception as e:
+            # Ghi lỗi ra console nhưng không làm sập toàn bộ tiến trình quét
+            print(f"[Scanner Error] Lỗi quét mã {ticker}: {str(e)}")
+        return None
+
+    # Sử dụng ThreadPoolExecutor quét song song 50 mã (giới hạn max_workers để tránh rate limit)
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = {executor.submit(scan_single_ticker, t): t for t in tickers_list}
+        for future in as_completed(futures):
+            res = future.result()
+            if res is not None:
+                results.append(res)
+                
+    # Sắp xếp kết quả: Tín hiệu mới nhất lên đầu, sau đó theo phần trăm tăng giá giảm dần
+    results.sort(key=lambda x: (x['date'], x['price_change_pct']), reverse=True)
+    
+    return {
+        'total_scanned': len(tickers_list),
+        'signals_found': len(results),
+        'results': results,
+        'time': datetime.now().isoformat()
+    }
+
+
+
 
 
 

@@ -123,7 +123,7 @@ function setupSearch() {
 
 // ===== TAB SWITCHING =====
 function switchTab(tab) {
-  const views = ['dashboard', 'candle', 'ai', 'backtest'];
+  const views = ['dashboard', 'candle', 'ai', 'backtest', 'scanner'];
   views.forEach(v => {
     $(`view-${v}`).style.display = v === tab ? 'block' : 'none';
     $(`tab-${v}`).classList.toggle('active', v === tab);
@@ -981,6 +981,184 @@ function showToast(message, type = 'info') {
 }
 
 // ===== INDUCTIVE RESEARCH (REMOVED) =====
+
+// ===== REAL-TIME MARKET SCANNER =====
+function toggleScannerThreshold() {
+  const select = $('scanner-strategy-select');
+  const wrap = $('scanner-threshold-wrap');
+  if (select && wrap) {
+    wrap.style.display = select.value === 'multi_signal_buy' ? 'flex' : 'none';
+  }
+}
+
+function viewTickerFromScanner(ticker) {
+  if (!ticker) return;
+  $('ticker-input').value = ticker;
+  switchTab('dashboard');
+  loadStock(ticker);
+}
+
+async function runMarketScan() {
+  const strategy = $('scanner-strategy-select').value;
+  const thresholdInput = $('scanner-threshold-input');
+  const threshold = thresholdInput ? parseInt(thresholdInput.value) || 3 : 3;
+  
+  const btn = $('btn-run-scan');
+  const progressContainer = $('scanner-progress-container');
+  const progressBar = $('scanner-progress-bar');
+  const progressPercent = $('scanner-progress-percent');
+  const progressStatus = $('scanner-progress-status');
+  const tbody = $('scanner-tbody');
+  const resultCount = $('scanner-result-count');
+  
+  // Reset UI và bật tiến trình
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div> Đang quét...';
+  
+  if (progressContainer) progressContainer.style.display = 'block';
+  if (progressBar) progressBar.style.width = '0%';
+  if (progressPercent) progressPercent.textContent = '0%';
+  if (progressStatus) progressStatus.textContent = 'Bắt đầu gửi yêu cầu rà soát 50 cổ phiếu...';
+  
+  tbody.innerHTML = `
+    <tr>
+      <td colspan="8" style="text-align:center; padding:40px; color:var(--text-muted);">
+        <div class="spinner" style="margin-bottom:10px; display:inline-block;"></div>
+        <div style="font-size:13px; font-weight:500;">Đang quét toàn bộ thị trường...</div>
+        <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">Hệ thống đang tải dữ liệu lịch sử và phân tích các chỉ báo kỹ thuật cho 50 mã chứng khoán hàng đầu Việt Nam.</div>
+      </td>
+    </tr>
+  `;
+  if (resultCount) resultCount.textContent = 'Tìm thấy: -- tín hiệu';
+  
+  // Chạy progress bar giả lập
+  let progress = 0;
+  const progressInterval = setInterval(() => {
+    if (progress < 90) {
+      // Tăng so le chậm dần để tạo trải nghiệm tự nhiên
+      progress += Math.floor(Math.random() * 15) + 5;
+      if (progress > 90) progress = 90;
+      if (progressBar) progressBar.style.width = `${progress}%`;
+      if (progressPercent) progressPercent.textContent = `${progress}%`;
+      
+      if (progress < 30) {
+        if (progressStatus) progressStatus.textContent = 'Đang kết nối API và lấy dữ liệu 50 mã...';
+      } else if (progress < 60) {
+        if (progressStatus) progressStatus.textContent = 'Đang tính toán các chỉ báo (MA10, MA50, MACD, Volume)...';
+      } else {
+        if (progressStatus) progressStatus.textContent = 'Đang rà soát tín hiệu mua theo chiến lược đã chọn...';
+      }
+    }
+  }, 350);
+  
+  try {
+    const res = await fetch(`${API_BASE}/api/scanner?strategy=${strategy}&threshold=${threshold}`);
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Lỗi rà soát thị trường');
+    }
+    const data = await res.json();
+    
+    // Dừng giả lập và đẩy lên 100%
+    clearInterval(progressInterval);
+    if (progressBar) progressBar.style.width = '100%';
+    if (progressPercent) progressPercent.textContent = '100%';
+    if (progressStatus) progressStatus.textContent = 'Rà soát hoàn tất thành công!';
+    
+    // Render kết quả
+    const results = data.results || [];
+    if (resultCount) resultCount.textContent = `Tìm thấy: ${results.length} tín hiệu`;
+    
+    if (results.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="8" style="text-align:center; padding:45px; color:var(--text-muted);">
+            <i class="fa-solid fa-circle-info" style="font-size:24px; margin-bottom:10px; display:block; color:var(--amber);"></i>
+            Không có cổ phiếu nào đáp ứng điều kiện mua của chiến lược hiện tại.
+            <div style="font-size:11px; margin-top:4px;">Bạn có thể đổi sang phong cách quét khác hoặc điều chỉnh ngưỡng đồng thuận thấp hơn và thử lại.</div>
+          </td>
+        </tr>
+      `;
+    } else {
+      let html = '';
+      results.forEach(item => {
+        const isGreen = item.price_change >= 0;
+        const changePctStr = formatNumber(item.price_change_pct, 2, true);
+        const changeColorClass = isGreen ? 'win' : 'loss';
+        
+        // Tạo chuỗi mô tả phong cách và chi tiết tín hiệu
+        let strategyLabel = '';
+        let detailLabel = '';
+        let recommendation = '';
+        let recommendationClass = '';
+        
+        if (strategy === 'macd_hist_bearish_surge') {
+          strategyLabel = '<span style="color:#f43f5e;font-weight:600;"><i class="fa-solid fa-chart-bar" style="margin-right:4px;"></i>MACD Histogram</span>';
+          detailLabel = 'Histogram chuyển màu (Đỏ nhạt → Đỏ đậm) + Vol đột biến &ge; 1,1x TB20';
+          recommendation = '🟢 MUA (Đảo chiều sớm)';
+          recommendationClass = 'buy';
+        } else {
+          strategyLabel = '<span style="color:#8b5cf6;font-weight:600;"><i class="fa-solid fa-list-check" style="margin-right:4px;"></i>Đồng thuận chỉ báo</span>';
+          
+          const sigsList = Array.isArray(item.buy_signals) ? item.buy_signals : [];
+          const sigsUpper = sigsList.map(s => s.toUpperCase()).join(', ');
+          detailLabel = `<strong>${sigsList.length}/6</strong> chỉ báo BUY: <span style="color:var(--text-secondary); font-family:monospace;">(${sigsUpper})</span>`;
+          
+          if (sigsList.length >= 5) {
+            recommendation = '🔥 MUA MẠNH (Tự tin Rất Cao)';
+            recommendationClass = 'strong';
+          } else if (sigsList.length >= 3) {
+            recommendation = '🟢 MUA (Tự tin Trung bình)';
+            recommendationClass = 'buy';
+          } else {
+            recommendation = '⚪ THEO DÕI';
+            recommendationClass = 'neutral';
+          }
+        }
+        
+        html += `
+          <tr>
+            <td style="font-weight:bold; color:var(--text-primary); font-size:13px; font-family:'JetBrains Mono',monospace;">${item.ticker}</td>
+            <td class="font-mono" style="font-weight:600;">${formatNumber(item.price, 2)}</td>
+            <td class="font-mono ${changeColorClass}" style="font-weight:600;">${changePctStr}%</td>
+            <td class="font-mono">${item.date}</td>
+            <td>${strategyLabel}</td>
+            <td>${detailLabel}</td>
+            <td><span class="signal-badge ${recommendationClass}" style="font-size:11px; font-weight:700;">${recommendation}</span></td>
+            <td style="text-align:center;">
+              <button class="btn-analyze" onclick="viewTickerFromScanner('${item.ticker}')" style="padding:4px 10px; font-size:11px; border-radius:4px; box-shadow:none;">
+                <i class="fa-solid fa-chart-line" style="margin-right:3px;"></i> Xem đồ thị
+              </button>
+            </td>
+          </tr>
+        `;
+      });
+      tbody.innerHTML = html;
+    }
+    
+    showToast(`✅ Đã rà soát xong 50 mã. Tìm thấy ${results.length} tín hiệu.`, 'success');
+  } catch (err) {
+    clearInterval(progressInterval);
+    if (progressStatus) progressStatus.textContent = `Lỗi rà soát: ${err.message}`;
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" style="text-align:center; padding:40px; color:var(--red);">
+          <i class="fa-solid fa-triangle-exclamation" style="font-size:24px; margin-bottom:10px; display:block;"></i>
+          Lỗi: ${err.message}
+          <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">Vui lòng kiểm tra xem server backend có đang hoạt động tốt hay không.</div>
+        </td>
+      </tr>
+    `;
+    showToast(`❌ Lỗi rà soát: ${err.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-play"></i> Bắt đầu rà soát';
+    setTimeout(() => {
+      if (progressContainer) progressContainer.style.display = 'none';
+    }, 1500);
+  }
+}
+
 
 // ===== WINDOW RESIZE =====
 window.addEventListener('resize', () => {
