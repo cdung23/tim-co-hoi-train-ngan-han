@@ -1,0 +1,6 @@
+vnstock>=4.0.0
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+pandas>=2.0.0
+numpy>=1.24.0
+python-dateutil>=2.8.0

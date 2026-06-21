@@ -1,0 +1,52 @@
+{
+  "macd_hist_dir_up": {
+    "name": "Độ dốc MACD Histogram tăng",
+    "weight": 7,
+    "correlation": 16.28
+  },
+  "macd_hist_red_light": {
+    "name": "MACD Histogram màu đỏ nhạt (thu nhỏ âm)",
+    "weight": 4,
+    "correlation": 8.31
+  },
+  "macd_golden_cross": {
+    "name": "MACD Golden Cross gần đây",
+    "weight": 2,
+    "correlation": 3.75
+  },
+  "price_above_ma10": {
+    "name": "Giá nằm trên MA10",
+    "weight": 7,
+    "correlation": 17.2
+  },
+  "price_above_ma20": {
+    "name": "Giá nằm trên MA20",
+    "weight": 9,
+    "correlation": 19.82
+  },
+  "bb_below_05": {
+    "name": "Bollinger Bands %B < 0.5 (Nửa dưới dải)",
+    "weight": 35,
+    "correlation": 80.17
+  },
+  "vol_above_1_2x": {
+    "name": "Khối lượng đột biến > 1.2x",
+    "weight": 20,
+    "correlation": 45.09
+  },
+  "has_bullish_candle": {
+    "name": "Có mô hình nến đảo chiều tăng",
+    "weight": 3,
+    "correlation": 6.45
+  },
+  "obv_slope_positive": {
+    "name": "Xu hướng OBV tăng (Dòng tiền tích lũy)",
+    "weight": 11,
+    "correlation": 25.39
+  },
+  "near_support": {
+    "name": "Giá gần vùng hỗ trợ (< 2%)",
+    "weight": 2,
+    "correlation": 7.32
+  }
+}

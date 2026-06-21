@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StockAI — Phân tích Kỹ thuật Cổ phiếu Ngắn hạn</title>
+  <meta name="description" content="Ứng dụng phân tích kỹ thuật cổ phiếu chuyên sâu: MA, RSI, MACD, Bollinger Bands, OBV, Nến Nhật, Back-testing 15 tháng, AI Gemini." />
+  <!-- Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <!-- TradingView Lightweight Charts -->
+  <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+  <!-- Marked.js Markdown Parser -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <!-- Styles -->
+  <link rel="stylesheet" href="style.css?v=1.0.1" />
+</head>
+<body>
+
+<div class="app-wrapper">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">📊</div>
+      <div class="logo-text">
+        <div class="app-name">StockAI</div>
+        <div class="app-sub">Phân tích Kỹ thuật</div>
+      </div>
+    </div>
+
+    <!-- Search -->
+    <div class="sidebar-search">
+      <label>Mã cổ phiếu</label>
+      <div class="search-box">
+        <input type="text" id="ticker-input" placeholder="VD: GEX, FPT, HPG" maxlength="10" />
+        <button class="btn-search" id="btn-search" title="Phân tích">
+          <i class="fa-solid fa-magnifying-glass"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="sidebar-nav">
+      <div class="nav-section-title">Phân tích</div>
+      <div class="nav-item active" id="nav-dashboard" onclick="switchTab('dashboard')">
+        <i class="fa-solid fa-chart-line"></i> Tổng quan
+      </div>
+      <div class="nav-item" id="nav-candle" onclick="switchTab('candle')">
+        <i class="fa-solid fa-candlestick-chart"></i> Nến Nhật
+      </div>
+      <div class="nav-item" id="nav-ai" onclick="switchTab('ai')">
+        <i class="fa-solid fa-robot"></i> AI Phân tích
+      </div>
+      <div class="nav-item" id="nav-backtest" onclick="switchTab('backtest')">
+        <i class="fa-solid fa-clock-rotate-left"></i> Back-testing
+      </div>
+      <div class="nav-item" id="nav-research" onclick="switchTab('research')">
+        <i class="fa-solid fa-graduation-cap"></i> Nghiên cứu
+      </div>
+    </nav>
+
+    <!-- Gemini API Key -->
+    <div class="sidebar-key">
+      <div class="key-label">
+        <span class="key-dot" id="key-dot"></span>
+        Gemini API Key
+      </div>
+      <div class="key-input-wrap" style="margin-bottom: 10px;">
+        <input type="password" id="gemini-key-input" placeholder="Dán API Key vào đây..." />
+        <button class="key-toggle" id="btn-toggle-key" title="Hiện/ẩn key">
+          <i class="fa-solid fa-eye-slash" id="key-eye-icon"></i>
+        </button>
+      </div>
+      <div class="key-label">Mô hình AI</div>
+      <select id="gemini-model-select" style="width: 100%; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 10px; color: var(--text-primary); font-family: 'Inter', sans-serif; font-size: 12px; outline: none; cursor: pointer;">
+        <option value="gemini-3.5-flash" selected>Gemini 3.5 Flash (Mạnh nhất)</option>
+        <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (Quota cao)</option>
+        <option value="gemini-3.0-flash">Gemini 3.0 Flash</option>
+        <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+      </select>
+    </div>
+
+    <div class="sidebar-footer">
+      <div>StockAI v1.0 — Powered by VNStock</div>
+      <div style="margin-top:4px; color: #3b82f6;">Backend: <span id="server-status">Đang kiểm tra...</span></div>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN CONTENT ============ -->
+  <div class="main-content">
+
+    <!-- Header -->
+    <header class="main-header">
+      <div class="header-ticker">
+        <span class="ticker-badge" id="header-ticker">---</span>
+        <span class="header-price" id="header-price">--</span>
+        <span class="header-change" id="header-change">--</span>
+      </div>
+      <div style="display:flex; gap:12px; align-items:center; margin-left:auto;">
+        <span style="font-size:12px; color:var(--text-muted);">Hỗ trợ: <span id="header-support" class="text-green font-mono">--</span></span>
+        <span style="font-size:12px; color:var(--text-muted);">Kháng cự: <span id="header-resistance" class="text-red font-mono">--</span></span>
+        <span class="header-date" id="header-date">--</span>
+      </div>
+    </header>
+
+    <!-- Tabs -->
+    <div class="tab-bar">
+      <button class="tab-btn active" id="tab-dashboard" onclick="switchTab('dashboard')">
+        <i class="fa-solid fa-gauge-high"></i> Tổng quan
+      </button>
+      <button class="tab-btn" id="tab-candle" onclick="switchTab('candle')">
+        <i class="fa-solid fa-fire"></i> Nến Nhật
+      </button>
+      <button class="tab-btn" id="tab-ai" onclick="switchTab('ai')">
+        <i class="fa-solid fa-robot"></i> AI Phân tích
+      </button>
+      <button class="tab-btn" id="tab-backtest" onclick="switchTab('backtest')">
+        <i class="fa-solid fa-chart-area"></i> Back-testing Lịch sử
+      </button>
+      <button class="tab-btn" id="tab-research" onclick="switchTab('research')">
+        <i class="fa-solid fa-graduation-cap"></i> Nghiên cứu Chỉ số
+      </button>
+    </div>
+
+    <!-- Content Area -->
+    <div class="content-area">
+
+      <!-- ====== TAB: DASHBOARD ====== -->
+      <div id="view-dashboard" class="fade-in">
+        <!-- KPI Row -->
+        <div class="kpi-row" style="margin-bottom:14px;">
+          <div class="kpi-card">
+            <div class="kpi-label"><i class="fa-solid fa-coins" style="color:var(--amber)"></i> Giá đóng cửa</div>
+            <div class="kpi-value" id="kpi-price">--</div>
+            <div class="kpi-sub" id="kpi-change-sub">--</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label"><i class="fa-solid fa-chart-line" style="color:var(--cyan)"></i> MACD (12, 26, 9)</div>
+            <div class="kpi-value" id="kpi-macd">--</div>
+            <div class="kpi-sub" id="kpi-macd-sub">--</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label"><i class="fa-solid fa-cubes" style="color:var(--purple)"></i> Volume / TB20</div>
+            <div class="kpi-value" id="kpi-volume">--</div>
+            <div class="kpi-sub" id="kpi-volume-sub">--</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label"><i class="fa-solid fa-lines-leaning" style="color:var(--blue-bright)"></i> Xu hướng MA</div>
+            <div class="kpi-value" id="kpi-ma" style="font-size:16px;">--</div>
+            <div class="kpi-sub" id="kpi-ma-sub">--</div>
+          </div>
+        </div>
+
+        <div class="dashboard-grid">
+          <!-- Chart Column -->
+          <div class="chart-col">
+            <div class="card">
+              <div class="card-header" style="flex-wrap: wrap; gap: 10px;">
+                <span class="card-title"><i class="fa-solid fa-chart-candlestick"></i> Biểu đồ nến + MA10/MA50/BB & MACD</span>
+                <!-- Timeframe Selector -->
+                <div class="timeframe-selector" style="display:flex; gap:4px; margin-left:auto;">
+                  <button class="tf-btn" id="tf-10y" onclick="setTimeframe('10y')">10y</button>
+                  <button class="tf-btn" id="tf-5y" onclick="setTimeframe('5y')">5y</button>
+                  <button class="tf-btn" id="tf-1y" onclick="setTimeframe('1y')">1y</button>
+                  <button class="tf-btn" id="tf-6p" onclick="setTimeframe('6p')">6p</button>
+                  <button class="tf-btn" id="tf-3p" onclick="setTimeframe('3p')">3p</button>
+                  <button class="tf-btn" id="tf-1p" onclick="setTimeframe('1p')">1p</button>
+                  <button class="tf-btn" id="tf-5n" onclick="setTimeframe('5n')">5n</button>
+                  <button class="tf-btn" id="tf-1n" onclick="setTimeframe('1n')">1n</button>
+                </div>
+              </div>
+              <!-- Legend -->
+              <div class="chart-legend">
+                <div class="legend-item"><div class="legend-dot" style="background:#60a5fa"></div> MA10</div>
+                <div class="legend-item"><div class="legend-dot" style="background:#fbbf24"></div> MA50</div>
+                <div class="legend-item"><div class="legend-dot" style="background:rgba(148,163,184,0.4)"></div> BB</div>
+              </div>
+              <!-- Main Chart -->
+              <div id="main-chart" style="height:470px;"></div>
+              <!-- Sub Chart -->
+              <div id="sub-chart" style="display: none;"></div>
+            </div>
+          </div>
+
+          <!-- Indicators Column -->
+          <div class="indicators-col">
+            <!-- Consensus Score -->
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title"><i class="fa-solid fa-scale-balanced"></i> Đồng thuận chỉ báo</span>
+              </div>
+              <div class="card-body consensus-card">
+                <div class="consensus-score hold" id="consensus-score">-/-</div>
+                <div class="consensus-label" id="consensus-label">Chờ phân tích...</div>
+                <div class="consensus-bar">
+                  <div class="consensus-fill" id="consensus-fill" style="width:0%;"></div>
+                </div>
+                <div class="consensus-detail">
+                  <span class="buy-count"><i class="fa-solid fa-arrow-trend-up"></i> Mua: <span id="cnt-buy">0</span></span>
+                  <span style="color:var(--text-muted)">Trung lập: <span id="cnt-neutral">0</span></span>
+                  <span class="sell-count"><i class="fa-solid fa-arrow-trend-down"></i> Bán: <span id="cnt-sell">0</span></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Signal Rows -->
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title"><i class="fa-solid fa-sliders"></i> Tín hiệu 6 chỉ báo</span>
+              </div>
+              <div class="card-body" style="padding:10px 12px;">
+                <div class="signal-grid" id="signal-grid">
+                  <div class="signal-row shimmer" style="height:36px;border-radius:6px;"></div>
+                  <div class="signal-row shimmer" style="height:36px;border-radius:6px;"></div>
+                  <div class="signal-row shimmer" style="height:36px;border-radius:6px;"></div>
+                  <div class="signal-row shimmer" style="height:36px;border-radius:6px;"></div>
+                  <div class="signal-row shimmer" style="height:36px;border-radius:6px;"></div>
+                  <div class="signal-row shimmer" style="height:36px;border-radius:6px;"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- MA Values -->
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title"><i class="fa-solid fa-lines-leaning"></i> Giá trị chỉ báo</span>
+              </div>
+              <div class="card-body" style="padding:10px 12px; font-size:12px;">
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;" id="indicator-values">
+                  <div style="color:var(--text-muted)">MA10: <span id="val-ma10" class="text-blue font-mono">--</span></div>
+                  <div style="color:var(--text-muted)">MA50: <span id="val-ma50" class="text-amber font-mono">--</span></div>
+                  <div style="color:var(--text-muted)">MACD: <span id="val-macd" class="font-mono">--</span></div>
+                  <div style="color:var(--text-muted)">Signal: <span id="val-signal" class="font-mono">--</span></div>
+                  <div style="color:var(--text-muted)">BB Upper: <span id="val-bb-upper" class="font-mono">--</span></div>
+                  <div style="color:var(--text-muted)">BB Lower: <span id="val-bb-lower" class="font-mono">--</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== TAB: NẾN NHẬT ====== -->
+      <div id="view-candle" style="display:none;" class="fade-in">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title"><i class="fa-solid fa-fire"></i> Mô hình nến được phát hiện</span>
+            </div>
+            <div class="card-body">
+              <div class="candle-patterns" id="candle-patterns">
+                <div style="color:var(--text-muted); text-align:center; padding:30px;">
+                  Tìm kiếm mã cổ phiếu để phân tích nến Nhật
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title"><i class="fa-solid fa-list"></i> 5 nến gần nhất</span>
+            </div>
+            <div class="card-body" id="recent-candles-body">
+              <div style="color:var(--text-muted); text-align:center; padding:30px;">
+                Chờ dữ liệu...
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== TAB: AI ANALYSIS ====== -->
+      <div id="view-ai" style="display:none;" class="fade-in">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title"><i class="fa-solid fa-robot"></i> Phân tích AI 7 bước — Gemini</span>
+            <div style="display:flex; gap:8px;">
+              <button class="btn-copy-prompt" id="btn-copy-prompt" onclick="copyPrompt()">
+                <i class="fa-solid fa-copy"></i> Copy Prompt
+              </button>
+              <button class="btn-analyze" id="btn-analyze" onclick="runAIAnalysis()">
+                <i class="fa-solid fa-sparkles"></i> Phân tích toàn diện
+              </button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="ai-output" id="ai-output">
+              <div class="ai-placeholder">
+                <i class="fa-solid fa-robot"></i>
+                <div style="font-size:14px; font-weight:500; color:var(--text-secondary);">
+                  Sẵn sàng phân tích
+                </div>
+                <div style="font-size:12px; color:var(--text-muted); max-width:400px; line-height:1.6;">
+                  1. Nhập Gemini API Key ở sidebar bên trái<br/>
+                  2. Tìm kiếm mã cổ phiếu<br/>
+                  3. Bấm "Phân tích toàn diện" để AI phân tích 7 bước
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== TAB: BACK-TESTING ====== -->
+      <div id="view-backtest" style="display:none;" class="fade-in">
+        <div class="card" style="margin-bottom:14px;">
+          <div class="card-header" style="flex-wrap: wrap; gap: 12px;">
+            <span class="card-title"><i class="fa-solid fa-flask"></i> Thống kê Back-testing Lịch sử</span>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <select id="bt-strategy-select" style="background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm); padding:6px 10px; color:var(--text-primary); font-size:12px; font-weight:600; outline:none; cursor:pointer;" onchange="loadBacktest()">
+                <option value="optimal_induction" selected>Thuật toán Quy nạp Tối ưu (Pro V5 - TP: 12%, SL: 6%)</option>
+                <option value="weighted_score">Điểm số trọng số tối ưu (Nghiên cứu Quy nạp)</option>
+                <option value="macd_hist_bearish_surge">MACD Histogram: Đỏ nhạt → Đỏ đậm (Nhận định của bạn)</option>
+                <option value="multi_signal_buy">Đồng thuận 6 chỉ báo kỹ thuật (Mặc định)</option>
+              </select>
+              <button class="btn-analyze" onclick="loadBacktest()" style="padding:6px 12px; font-size:11.5px; box-shadow:none;">
+                <i class="fa-solid fa-rotate"></i> Chạy lại
+              </button>
+            </div>
+          </div>
+          <div class="card-body">
+            <!-- Verdict Card -->
+            <div id="bt-verdict-card" style="display:none; padding:14px 18px; border-radius:var(--radius-sm); margin-bottom:16px; font-size:12.5px; font-weight:600; line-height:1.5;">
+              <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                <span id="bt-verdict-icon" style="font-size:16px;">🔍</span>
+                <span id="bt-verdict-title" style="text-transform:uppercase; font-size:12px; font-weight:800; letter-spacing:0.5px;">KẾT QUẢ KIỂM ĐỊNH NHẬN ĐỊNH</span>
+              </div>
+              <div id="bt-verdict-text">...</div>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="backtest-stats-grid" style="display:grid; grid-template-columns: repeat(5, 1fr); gap:12px; margin-bottom:16px;">
+              <div class="stat-card" style="background:rgba(11, 15, 25, 0.5); border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px; text-align:center;">
+                <div style="font-size:10px; color:var(--text-muted); font-weight:700; text-transform:uppercase; margin-bottom:4px;" id="bt-label-1">Sau 3 phiên (3d)</div>
+                <div class="stat-value neutral" id="bt-wr-3d" style="font-size:20px; font-weight:800; font-family:'JetBrains Mono',monospace;">--</div>
+                <div id="bt-ev-3d" style="font-size:11px; color:var(--text-muted); font-weight:600; margin-top:2px;">EV: --</div>
+              </div>
+              <div class="stat-card" style="background:rgba(11, 15, 25, 0.5); border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px; text-align:center;">
+                <div style="font-size:10px; color:var(--text-muted); font-weight:700; text-transform:uppercase; margin-bottom:4px;" id="bt-label-2">Sau 5 phiên (5d)</div>
+                <div class="stat-value neutral" id="bt-wr-5d" style="font-size:20px; font-weight:800; font-family:'JetBrains Mono',monospace;">--</div>
+                <div id="bt-ev-5d" style="font-size:11px; color:var(--text-muted); font-weight:600; margin-top:2px;">EV: --</div>
+              </div>
+              <div class="stat-card" style="background:rgba(11, 15, 25, 0.5); border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px; text-align:center;">
+                <div style="font-size:10px; color:var(--text-muted); font-weight:700; text-transform:uppercase; margin-bottom:4px;" id="bt-label-3">Sau 10 phiên (10d)</div>
+                <div class="stat-value neutral" id="bt-wr-10d" style="font-size:20px; font-weight:800; font-family:'JetBrains Mono',monospace;">--</div>
+                <div id="bt-ev-10d" style="font-size:11px; color:var(--text-muted); font-weight:600; margin-top:2px;">EV: --</div>
+              </div>
+              <div class="stat-card" style="background:rgba(11, 15, 25, 0.5); border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px; text-align:center;">
+                <div style="font-size:10px; color:var(--text-muted); font-weight:700; text-transform:uppercase; margin-bottom:4px;" id="bt-label-4">Sau 20 phiên (20d)</div>
+                <div class="stat-value neutral" id="bt-wr-20d" style="font-size:20px; font-weight:800; font-family:'JetBrains Mono',monospace;">--</div>
+                <div id="bt-ev-20d" style="font-size:11px; color:var(--text-muted); font-weight:600; margin-top:2px;">EV: --</div>
+              </div>
+              <div class="stat-card" style="background:rgba(11, 15, 25, 0.5); border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px; text-align:center; display:flex; flex-direction:column; justify-content:center;">
+                <div style="font-size:10px; color:var(--text-muted); font-weight:700; text-transform:uppercase; margin-bottom:4px;">Tín hiệu</div>
+                <div class="stat-value" id="bt-signals" style="font-size:20px; font-weight:800; font-family:'JetBrains Mono',monospace; color:var(--text-primary);">--</div>
+                <div style="font-size:11px; color:var(--text-muted); font-weight:600; margin-top:2px;">Tổng quét</div>
+              </div>
+            </div>
+            <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px;" id="bt-summary-text">
+              Tìm kiếm mã cổ phiếu và bấm "Chạy lại" để xem back-testing
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title"><i class="fa-solid fa-table"></i> Lịch sử tín hiệu (quét toàn bộ lịch sử)</span>
+          </div>
+          <div class="card-body" style="padding:0;">
+            <div class="backtest-table-wrap">
+              <table class="backtest-table" id="backtest-table">
+                <thead>
+                  <tr>
+                    <th>Ngày tín hiệu</th>
+                    <th>Giá vào</th>
+                    <th>Chỉ báo</th>
+                    <th>Sau 3 phiên</th>
+                    <th>Sau 5 phiên</th>
+                    <th>Sau 10 phiên</th>
+                    <th>Sau 20 phiên</th>
+                    <th>Kết quả</th>
+                  </tr>
+                </thead>
+                <tbody id="backtest-tbody">
+                  <tr><td colspan="8" style="text-align:center; padding:30px; color:var(--text-muted);">
+                    Chờ dữ liệu back-testing...
+                  </td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== TAB: RESEARCH ====== -->
+      <div id="view-research" style="display:none;" class="fade-in">
+        <div class="card" style="margin-bottom:14px;">
+          <div class="card-header" style="flex-wrap: wrap; gap: 12px;">
+            <span class="card-title"><i class="fa-solid fa-graduation-cap"></i> Nghiên cứu Quy nạp & Tối ưu Trọng số</span>
+            <div style="display:flex; align-items:center; gap:8px; margin-left:auto;">
+              <input type="text" id="research-tickers-input" value="GEX, VIX, HPG, MBB, MWG" style="background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm); padding:6px 10px; color:var(--text-primary); font-size:12px; width:200px; outline:none;" />
+              <button class="btn-analyze" onclick="runResearch()" id="btn-run-research" style="padding:6px 12px; font-size:11.5px; box-shadow:none;">
+                <i class="fa-solid fa-play"></i> Chạy nghiên cứu
+              </button>
+            </div>
+          </div>
+          <div class="card-body">
+            <p style="font-size:12.5px; color:var(--text-muted); line-height:1.5; margin-bottom:14px;">
+              Phương pháp nghiên cứu quy nạp tự động tìm kiếm các điểm biến động lớn (Tăng/Giảm mạnh ≥ 5% so với 5 phiên trước hoặc Đảo chiều) trong 5 năm lịch sử của các mã cổ phiếu. Sau đó phân tích trạng thái chỉ báo tại phiên kích hoạt (T) để tìm ra tương quan và tính toán bộ trọng số tối ưu (Optimal Weights) cho thuật toán Weighted Scoring.
+            </p>
+            
+            <!-- Loading state -->
+            <div id="research-loading" style="display:none; text-align:center; padding:40px 20px;">
+              <div class="spinner" style="margin-bottom:16px;"></div>
+              <div style="font-size:13px; font-weight:600; color:var(--text-primary);">Đang phân tích 5 năm dữ liệu lịch sử...</div>
+              <div style="font-size:11.5px; color:var(--text-muted); margin-top:6px;">Quá trình tải và tính toán chỉ báo cho 5 mã cổ phiếu có thể mất 15-30 giây.</div>
+            </div>
+
+            <!-- Result Dashboard -->
+            <div id="research-results-container" style="display:none;">
+              <!-- Weights Grid -->
+              <div style="margin-bottom:20px;">
+                <h3 style="font-size:13.5px; font-weight:700; margin-bottom:12px; color:var(--text-primary); display:flex; align-items:center; gap:6px;">
+                  <i class="fa-solid fa-weight-hanging" style="color:var(--blue-bright)"></i> Bộ trọng số tối ưu (Optimal Weights) cho điểm số Weighted Scoring
+                </h3>
+                <div id="research-weights-grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap:10px;">
+                  <!-- Dynamic weight cards -->
+                </div>
+              </div>
+
+              <!-- Heatmap Table -->
+              <div style="margin-top:24px;">
+                <h3 style="font-size:13.5px; font-weight:700; margin-bottom:12px; color:var(--text-primary); display:flex; align-items:center; gap:6px;">
+                  <i class="fa-solid fa-table-cells" style="color:var(--purple)"></i> Heatmap: Tần suất chỉ báo xuất hiện trước sự kiện (%)
+                </h3>
+                <div style="overflow-x:auto; border:1px solid var(--border); border-radius:var(--radius-sm);">
+                  <table class="backtest-table" style="width:100%; min-width:600px; border:none; margin:0;">
+                    <thead>
+                      <tr>
+                        <th>Chỉ báo kỹ thuật (ở phiên T)</th>
+                        <th style="text-align:center; color:var(--green);">Tăng mạnh (Surge Up)</th>
+                        <th style="text-align:center; color:var(--green); font-weight:800;">Đảo chiều tăng (Rev Up)</th>
+                        <th style="text-align:center; color:var(--red);">Giảm mạnh (Surge Down)</th>
+                        <th style="text-align:center; color:var(--red); font-weight:800;">Đảo chiều giảm (Rev Down)</th>
+                      </tr>
+                    </thead>
+                    <tbody id="research-heatmap-tbody">
+                      <!-- Dynamic heatmap rows -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Recent Events Table -->
+        <div class="card" id="research-events-card" style="display:none;">
+          <div class="card-header">
+            <span class="card-title"><i class="fa-solid fa-clock"></i> Các sự kiện biến động tiêu biểu được phát hiện (20 gần nhất)</span>
+          </div>
+          <div class="card-body" style="padding:0;">
+            <div class="backtest-table-wrap">
+              <table class="backtest-table" style="margin:0; border:none;">
+                <thead>
+                  <tr>
+                    <th>Mã</th>
+                    <th>Loại sự kiện</th>
+                    <th>Ngày kích hoạt (T)</th>
+                    <th>Giá tại T</th>
+                    <th>Biến động sau đó</th>
+                    <th>MACD Hist Color (T)</th>
+                    <th>MACD Hist Dir (T)</th>
+                    <th>Vol vs MA20 (T)</th>
+                    <th>Nến Nhật (T)</th>
+                  </tr>
+                </thead>
+                <tbody id="research-events-tbody">
+                  <!-- Dynamic rows -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- end content-area -->
+  </div><!-- end main-content -->
+</div><!-- end app-wrapper -->
+
+<!-- Toast Container -->
+<div class="toast-container" id="toast-container"></div>
+
+<script src="app.js?v=1.0.5"></script>
+</body>
+</html>
