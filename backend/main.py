@@ -43,10 +43,77 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+def fetch_ohlcv_kbs(ticker: str, months: int = 120) -> pd.DataFrame:
+    """Gọi trực tiếp API của KB Securities không qua vnstock wrapper để tránh Rate Limit"""
+    import requests
+    from datetime import datetime, timedelta
+    import pandas as pd
+    
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=months * 31)
+    
+    sdate = start_date.strftime('%d-%m-%Y')
+    edate = end_date.strftime('%d-%m-%Y')
+    
+    url = f"https://kbbuddywts.kbsec.com.vn/iis-server/investment/stocks/{ticker.upper()}/data_day"
+    params = {
+        "sdate": sdate,
+        "edate": edate
+    }
+    headers = {
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
+    
+    res = requests.get(url, params=params, headers=headers, timeout=15)
+    if res.status_code != 200:
+        raise ValueError(f"KBS API returned status code {res.status_code}")
+        
+    json_data = res.json()
+    if "data_day" not in json_data:
+        raise ValueError(f"Invalid response from KBS: {json_data}")
+        
+    raw_data = json_data["data_day"]
+    if not raw_data:
+        raise ValueError(f"No data returned for {ticker}")
+        
+    # Convert to DataFrame
+    df = pd.DataFrame(raw_data)
+    df = df.rename(columns={
+        't': 'time',
+        'o': 'open',
+        'h': 'high',
+        'l': 'low',
+        'c': 'close',
+        'v': 'volume'
+    })
+    
+    # Chuẩn hóa kiểu dữ liệu và chia giá cho 1000
+    df['time'] = pd.to_datetime(df['time'])
+    df['open'] = df['open'] / 1000.0
+    df['high'] = df['high'] / 1000.0
+    df['low'] = df['low'] / 1000.0
+    df['close'] = df['close'] / 1000.0
+    df['volume'] = df['volume'].astype(int)
+    
+    df = df[['time', 'open', 'high', 'low', 'close', 'volume']].dropna()
+    df = df.sort_values('time').reset_index(drop=True)
+    return df
+
 
 def fetch_ohlcv(ticker: str, months: int = 120) -> pd.DataFrame:
     """Lấy dữ liệu OHLCV từ VNStock với cơ chế fallback nếu số tháng yêu cầu bị lỗi"""
     last_err = None
+    
+    # 1. Thử gọi trực tiếp API KBS (Không bị giới hạn Rate Limit, cực kỳ nhanh)
+    try:
+        df = fetch_ohlcv_kbs(ticker, months)
+        if df is not None and not df.empty:
+            return df
+    except Exception as e_direct_kbs:
+        last_err = e_direct_kbs
+        
+    # Fallback sang cách gọi qua vnstock wrapper nếu gọi trực tiếp thất bại
     test_months = [months]
     for m in [60, 36, 15]:
         if m not in test_months and m < months:
@@ -54,10 +121,10 @@ def fetch_ohlcv(ticker: str, months: int = 120) -> pd.DataFrame:
             
     for m in test_months:
         try:
-            # 1. Thử vnstock v4.0+ API mới (dùng Quote trực tiếp để tránh cảnh báo deprecation gây lỗi unicode)
+            # 1. Thử nguồn KBS (Không bị giới hạn Rate Limit, cực kỳ ổn định)
             try:
                 from vnstock.api.quote import Quote
-                q = Quote(symbol=ticker.upper(), source='VCI')
+                q = Quote(symbol=ticker.upper(), source='kbs')
                 end_date = datetime.now().strftime('%Y-%m-%d')
                 start_date = (datetime.now() - timedelta(days=m * 31)).strftime('%Y-%m-%d')
                 df = q.history(start=start_date, end=end_date, interval='1D')
@@ -77,10 +144,35 @@ def fetch_ohlcv(ticker: str, months: int = 120) -> pd.DataFrame:
                     df = df[['time', 'open', 'high', 'low', 'close', 'volume']].dropna()
                     df = df.sort_values('time').reset_index(drop=True)
                     return df
+            except Exception as e_kbs:
+                last_err = e_kbs
+                
+            # 2. Dự phòng 1: Thử vnstock v4.0+ VCI
+            try:
+                from vnstock.api.quote import Quote
+                q = Quote(symbol=ticker.upper(), source='VCI')
+                end_date = datetime.now().strftime('%Y-%m-%d')
+                start_date = (datetime.now() - timedelta(days=m * 31)).strftime('%Y-%m-%d')
+                df = q.history(start=start_date, end=end_date, interval='1D')
+                if df is not None and not df.empty:
+                    col_map = {}
+                    for col in df.columns:
+                        cl = col.lower()
+                        if 'open' in cl: col_map[col] = 'open'
+                        elif 'high' in cl: col_map[col] = 'high'
+                        elif 'low' in cl: col_map[col] = 'low'
+                        elif 'close' in cl: col_map[col] = 'close'
+                        elif 'volume' in cl or 'vol' in cl: col_map[col] = 'volume'
+                        elif 'time' in cl or 'date' in cl: col_map[col] = 'time'
+                    df = df.rename(columns=col_map)
+                    df['time'] = pd.to_datetime(df['time'])
+                    df = df[['time', 'open', 'high', 'low', 'close', 'volume']].dropna()
+                    df = df.sort_values('time').reset_index(drop=True)
+                    return df
             except Exception as e_new:
                 last_err = e_new
                 
-            # 2. Dự phòng: Thử vnstock v4.0+ SSI hoặc nguồn dữ liệu khác nếu VCI lỗi
+            # 3. Dự phòng 2: Thử vnstock v4.0+ SSI
             try:
                 from vnstock.api.quote import Quote
                 q = Quote(symbol=ticker.upper(), source='SSI')
