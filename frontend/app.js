@@ -34,7 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // ===== SERVER STATUS =====
 async function checkServerStatus() {
   try {
-    const res = await fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(3000) });
+    const res = await fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(10000) });
     if (res.ok) {
       $('server-status').textContent = '✅ Online';
       $('server-status').style.color = 'var(--green)';
