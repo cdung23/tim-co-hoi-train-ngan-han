@@ -3,7 +3,7 @@
  * Tích hợp: Backend API + TradingView Charts + Gemini API Streaming
  */
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = 'https://tim-co-hoi-train-ngan-han.onrender.com';
 
 // ===== STATE =====
 let currentTicker = '';
