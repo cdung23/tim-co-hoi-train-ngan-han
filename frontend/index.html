@@ -58,9 +58,6 @@
       <div class="nav-item" id="nav-backtest" onclick="switchTab('backtest')">
         <i class="fa-solid fa-clock-rotate-left"></i> Back-testing
       </div>
-      <div class="nav-item" id="nav-research" onclick="switchTab('research')">
-        <i class="fa-solid fa-graduation-cap"></i> Nghiên cứu
-      </div>
     </nav>
 
     <!-- Gemini API Key -->
@@ -120,9 +117,6 @@
       </button>
       <button class="tab-btn" id="tab-backtest" onclick="switchTab('backtest')">
         <i class="fa-solid fa-chart-area"></i> Back-testing Lịch sử
-      </button>
-      <button class="tab-btn" id="tab-research" onclick="switchTab('research')">
-        <i class="fa-solid fa-graduation-cap"></i> Nghiên cứu Chỉ số
       </button>
     </div>
 
@@ -395,98 +389,7 @@
         </div>
       </div>
 
-      <!-- ====== TAB: RESEARCH ====== -->
-      <div id="view-research" style="display:none;" class="fade-in">
-        <div class="card" style="margin-bottom:14px;">
-          <div class="card-header" style="flex-wrap: wrap; gap: 12px;">
-            <span class="card-title"><i class="fa-solid fa-graduation-cap"></i> Nghiên cứu Quy nạp & Tối ưu Trọng số</span>
-            <div style="display:flex; align-items:center; gap:8px; margin-left:auto;">
-              <input type="text" id="research-tickers-input" value="GEX, VIX, HPG, MBB, MWG" style="background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm); padding:6px 10px; color:var(--text-primary); font-size:12px; width:200px; outline:none;" />
-              <button class="btn-analyze" onclick="runResearch()" id="btn-run-research" style="padding:6px 12px; font-size:11.5px; box-shadow:none;">
-                <i class="fa-solid fa-play"></i> Chạy nghiên cứu
-              </button>
-            </div>
-          </div>
-          <div class="card-body">
-            <p style="font-size:12.5px; color:var(--text-muted); line-height:1.5; margin-bottom:14px;">
-              Phương pháp nghiên cứu quy nạp tự động tìm kiếm các điểm biến động lớn (Tăng/Giảm mạnh ≥ 5% so với 5 phiên trước hoặc Đảo chiều) trong 5 năm lịch sử của các mã cổ phiếu. Sau đó phân tích trạng thái chỉ báo tại phiên kích hoạt (T) để tìm ra tương quan và tính toán bộ trọng số tối ưu (Optimal Weights) cho thuật toán Weighted Scoring.
-            </p>
-            
-            <!-- Loading state -->
-            <div id="research-loading" style="display:none; text-align:center; padding:40px 20px;">
-              <div class="spinner" style="margin-bottom:16px;"></div>
-              <div style="font-size:13px; font-weight:600; color:var(--text-primary);">Đang phân tích 5 năm dữ liệu lịch sử...</div>
-              <div style="font-size:11.5px; color:var(--text-muted); margin-top:6px;">Quá trình tải và tính toán chỉ báo cho 5 mã cổ phiếu có thể mất 15-30 giây.</div>
-            </div>
 
-            <!-- Result Dashboard -->
-            <div id="research-results-container" style="display:none;">
-              <!-- Weights Grid -->
-              <div style="margin-bottom:20px;">
-                <h3 style="font-size:13.5px; font-weight:700; margin-bottom:12px; color:var(--text-primary); display:flex; align-items:center; gap:6px;">
-                  <i class="fa-solid fa-weight-hanging" style="color:var(--blue-bright)"></i> Bộ trọng số tối ưu (Optimal Weights) cho điểm số Weighted Scoring
-                </h3>
-                <div id="research-weights-grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap:10px;">
-                  <!-- Dynamic weight cards -->
-                </div>
-              </div>
-
-              <!-- Heatmap Table -->
-              <div style="margin-top:24px;">
-                <h3 style="font-size:13.5px; font-weight:700; margin-bottom:12px; color:var(--text-primary); display:flex; align-items:center; gap:6px;">
-                  <i class="fa-solid fa-table-cells" style="color:var(--purple)"></i> Heatmap: Tần suất chỉ báo xuất hiện trước sự kiện (%)
-                </h3>
-                <div style="overflow-x:auto; border:1px solid var(--border); border-radius:var(--radius-sm);">
-                  <table class="backtest-table" style="width:100%; min-width:600px; border:none; margin:0;">
-                    <thead>
-                      <tr>
-                        <th>Chỉ báo kỹ thuật (ở phiên T)</th>
-                        <th style="text-align:center; color:var(--green);">Tăng mạnh (Surge Up)</th>
-                        <th style="text-align:center; color:var(--green); font-weight:800;">Đảo chiều tăng (Rev Up)</th>
-                        <th style="text-align:center; color:var(--red);">Giảm mạnh (Surge Down)</th>
-                        <th style="text-align:center; color:var(--red); font-weight:800;">Đảo chiều giảm (Rev Down)</th>
-                      </tr>
-                    </thead>
-                    <tbody id="research-heatmap-tbody">
-                      <!-- Dynamic heatmap rows -->
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-
-          </div>
-        </div>
-
-        <!-- Recent Events Table -->
-        <div class="card" id="research-events-card" style="display:none;">
-          <div class="card-header">
-            <span class="card-title"><i class="fa-solid fa-clock"></i> Các sự kiện biến động tiêu biểu được phát hiện (20 gần nhất)</span>
-          </div>
-          <div class="card-body" style="padding:0;">
-            <div class="backtest-table-wrap">
-              <table class="backtest-table" style="margin:0; border:none;">
-                <thead>
-                  <tr>
-                    <th>Mã</th>
-                    <th>Loại sự kiện</th>
-                    <th>Ngày kích hoạt (T)</th>
-                    <th>Giá tại T</th>
-                    <th>Biến động sau đó</th>
-                    <th>MACD Hist Color (T)</th>
-                    <th>MACD Hist Dir (T)</th>
-                    <th>Vol vs MA20 (T)</th>
-                    <th>Nến Nhật (T)</th>
-                  </tr>
-                </thead>
-                <tbody id="research-events-tbody">
-                  <!-- Dynamic rows -->
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </div>
 
     </div><!-- end content-area -->
   </div><!-- end main-content -->
