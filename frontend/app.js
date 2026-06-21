@@ -3,7 +3,9 @@
  * Tích hợp: Backend API + TradingView Charts + Gemini API Streaming
  */
 
-const API_BASE = 'https://tim-co-hoi-train-ngan-han.onrender.com';
+const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  ? 'http://localhost:8000'
+  : 'https://tim-co-hoi-train-ngan-han.onrender.com';
 
 // Hàm helper định dạng số chuẩn Việt Nam (Dấu phẩy phân cách thập phân, dấu chấm phân cách hàng nghìn)
 function formatNumber(num, decimals = 2, showSign = false) {
