@@ -201,6 +201,66 @@ def run_backtest(df: pd.DataFrame, strategy: str = "macd_hist_bearish_surge", th
                 buy_signals = f"{score} Điểm"
                 rule_name = f"Điểm số quy nạp đạt {score}đ"
 
+        elif strategy in ["rsi_divergence_pure", "rsi_divergence_combo"]:
+            # Phân kỳ dương RSI (RSI Bullish Divergence)
+            found_div = False
+            for t1 in range(idx - 1, idx - 4, -1):
+                if t1 < 15:
+                    continue
+                # t1 là đáy cục bộ (pivot low) của RSI nếu thấp hơn các phiên xung quanh
+                is_t1_pivot = (rsi_vals[t1] < rsi_vals[t1-1]) and (rsi_vals[t1] < rsi_vals[t1-2]) and (rsi_vals[t1] < rsi_vals[t1-3]) and (rsi_vals[t1] < rsi_vals[t1+1])
+                if is_t1_pivot and rsi_vals[t1] < 40:
+                    # Quét ngược tìm đáy trước đó t2 trong khoảng [t1-35, t1-5]
+                    for t2 in range(t1 - 5, t1 - 35, -1):
+                        if t2 < 5:
+                            continue
+                        is_t2_pivot = (rsi_vals[t2] < rsi_vals[t2-1]) and (rsi_vals[t2] < rsi_vals[t2-2]) and (rsi_vals[t2] < rsi_vals[t2-3]) and (rsi_vals[t2] < rsi_vals[t2+1])
+                        if is_t2_pivot and rsi_vals[t2] < 40:
+                            # Tránh phân kỳ ảo khi RSI đi quá cao ở giữa
+                            in_between_rsi = rsi_vals[t2+1:t1]
+                            if len(in_between_rsi) > 0 and np.max(in_between_rsi) > 60:
+                                continue
+                            
+                            # Điều kiện phân kỳ dương
+                            if low_vals[t1] < low_vals[t2] and rsi_vals[t1] > rsi_vals[t2] + 0.5:
+                                found_div = True
+                                break
+                    if found_div:
+                        break
+            
+            if found_div:
+                if strategy == "rsi_divergence_pure":
+                    is_signal = True
+                    buy_signals = "Phân kỳ RSI"
+                    rule_name = "Phân kỳ dương RSI vùng đáy"
+                elif strategy == "rsi_divergence_combo":
+                    # Combo: Volume đột biến + Nến đảo chiều tại phiên idx
+                    vol_today = vol_vals[idx]
+                    vol_ma = vol_ma_vals[idx]
+                    is_vol_ok = not np.isnan(vol_ma) and vol_ma > 0 and vol_today >= 1.15 * vol_ma
+                    
+                    c0_close = close_vals[idx]
+                    c0_open = open_vals[idx]
+                    c0_high = high_vals[idx]
+                    c0_low = low_vals[idx]
+                    c1_close = close_vals[idx-1]
+                    
+                    is_up_1pct = (c0_close - c1_close) / c1_close >= 0.01
+                    is_green = c0_close > c0_open
+                    
+                    body = abs(c0_close - c0_open)
+                    rng = c0_high - c0_low
+                    lower_shadow = min(c0_close, c0_open) - c0_low
+                    upper_shadow = c0_high - max(c0_close, c0_open)
+                    is_hammer = (body < rng * 0.3) and (lower_shadow >= body * 2) and (upper_shadow <= body * 0.5)
+                    
+                    is_candle_ok = is_up_1pct or is_green or is_hammer
+                    
+                    if is_vol_ok and is_candle_ok:
+                        is_signal = True
+                        buy_signals = "Combo RSI"
+                        rule_name = "Combo Phân kỳ RSI + Vol >= 1,15x + Nến đảo chiều"
+
         else: # multi_signal_buy (Mặc định đồng thuận 6 chỉ báo)
             count = 0
             # MA10
@@ -360,7 +420,10 @@ def run_backtest(df: pd.DataFrame, strategy: str = "macd_hist_bearish_surge", th
         stats['avg_win_15d_dynamic'] = avg_w
         stats['avg_loss_15d_dynamic'] = avg_l
     else:
-        main_p = 5 if strategy in ["macd_hist_bearish_surge", "weighted_score"] else 10
+        if strategy in ["rsi_divergence_pure", "rsi_divergence_combo"]:
+            main_p = 20
+        else:
+            main_p = 5 if strategy in ["macd_hist_bearish_surge", "weighted_score"] else 10
         main_wr = stats[f'win_rate_{main_p}d']
         main_ev = stats[f'ev_{main_p}d']
 
@@ -368,7 +431,27 @@ def run_backtest(df: pd.DataFrame, strategy: str = "macd_hist_bearish_surge", th
     verdict = ""
     verdict_class = ""
     
-    if strategy == "macd_hist_bearish_surge":
+    if strategy in ["rsi_divergence_pure", "rsi_divergence_combo"]:
+        wr_20d = stats['win_rate_20d']
+        ev_20d = stats['ev_20d']
+        wr_20d_str = str(wr_20d).replace('.', ',')
+        ev_20d_str = str(ev_20d).replace('.', ',')
+        
+        if wr_20d >= 60 and ev_20d > 0:
+            if wr_20d >= 68:
+                verdict = f"THUẬT TOÁN ĐẠT HIỆU QUẢ KỶ LỤC! Chiến lược Phân kỳ RSI mang lại tỷ lệ thắng cực cao {wr_20d_str}% ở T+20 với Expected Value cực tốt (+{ev_20d_str}%)."
+                verdict_class = "success"
+            else:
+                verdict = f"CHIẾN LƯỢC ĐẠT HIỆU QUẢ CAO! Phân kỳ RSI cho tỷ lệ thắng {wr_20d_str}% ở T+20 với Expected Value dương (+{ev_20d_str}%)."
+                verdict_class = "success"
+        elif wr_20d >= 50 and ev_20d >= 0:
+            verdict = f"CHIẾN LƯỢC ĐẠT HIỆU QUẢ TRUNG BÌNH. Tỷ lệ thắng đạt {wr_20d_str}% ở T+20 với Expected Value dương nhẹ."
+            verdict_class = "info"
+        else:
+            verdict = f"CHIẾN LƯỢC ĐẠT HIỆU QUẢ THẤP. Dữ liệu cho thấy tỷ lệ thắng chỉ đạt {wr_20d_str}% ở T+20 (EV: {ev_20d_str}%)."
+            verdict_class = "danger"
+            
+    elif strategy == "macd_hist_bearish_surge":
         wr_3d = stats['win_rate_3d']
         wr_5d = stats['win_rate_5d']
         ev_3d = stats['ev_3d']

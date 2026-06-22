@@ -125,7 +125,7 @@ function setupSearch() {
 
 // ===== TAB SWITCHING =====
 function switchTab(tab) {
-  const views = ['dashboard', 'candle', 'ai', 'backtest', 'scanner'];
+  const views = ['dashboard', 'candle', 'ai', 'deepsearch', 'backtest', 'scanner'];
   views.forEach(v => {
     $(`view-${v}`).style.display = v === tab ? 'block' : 'none';
     $(`tab-${v}`).classList.toggle('active', v === tab);
@@ -699,7 +699,7 @@ async function loadBacktest() {
     $('bt-signals').textContent = formatNumber(data.valid_signals, 0);
 
     // Build summary text
-    const mainP = strategy === 'macd_hist_bearish_surge' ? '5d' : (strategy === 'optimal_induction' ? '15d_dynamic' : '10d');
+    const mainP = strategy === 'macd_hist_bearish_surge' ? '5d' : (strategy === 'optimal_induction' ? '15d_dynamic' : (strategy === 'rsi_divergence_combo' || strategy === 'rsi_divergence_pure' ? '20d' : '10d'));
     const labelP = strategy === 'optimal_induction' ? 'Động (15d)' : `đại diện (${mainP})`;
     const totalWins = stats[`win_count_${mainP}`] || 0;
     const totalLosses = stats[`loss_count_${mainP}`] || 0;
@@ -767,7 +767,7 @@ async function loadBacktest() {
           resultLabel = `<span class="${isWin ? 'text-green' : 'text-red'}" style="font-weight:600;">${isWin ? '✅' : '❌'} ${status} (${isWin ? '+' : ''}${formatNumber(resVal, 2)}%)</span>`;
         }
       } else {
-        const targetPct = strategy === 'macd_hist_bearish_surge' ? r.pct_5d : r.pct_10d;
+        const targetPct = strategy === 'macd_hist_bearish_surge' ? r.pct_5d : (strategy === 'rsi_divergence_combo' || strategy === 'rsi_divergence_pure' ? r.pct_20d : r.pct_10d);
         if (targetPct === null || targetPct === undefined) {
           resultLabel = '<span style="color:var(--text-muted);">⏳ Chờ</span>';
         } else {
@@ -782,6 +782,10 @@ async function loadBacktest() {
       let badgeLabel = '';
       if (strategy === 'macd_hist_bearish_surge') {
         badgeLabel = '<span style="background:rgba(239,68,68,0.15);color:var(--red);padding:2px 7px;border-radius:4px;font-size:11px;">🔴 Bearish Surge</span>';
+      } else if (strategy === 'rsi_divergence_pure') {
+        badgeLabel = '<span style="background:rgba(6,182,212,0.15);color:var(--cyan);padding:2px 7px;border-radius:4px;font-size:11px;">🔵 Phân kỳ RSI</span>';
+      } else if (strategy === 'rsi_divergence_combo') {
+        badgeLabel = '<span style="background:rgba(168,85,247,0.15);color:var(--purple);padding:2px 7px;border-radius:4px;font-size:11px;font-weight:700;"><i class="fa-solid fa-crown" style="margin-right:3px;"></i>Combo RSI Tối ưu</span>';
       } else if (strategy === 'optimal_induction') {
         badgeLabel = '<span style="background:rgba(16,185,129,0.15);color:var(--green);padding:2px 7px;border-radius:4px;font-size:11px;font-weight:700;"><i class="fa-solid fa-bolt" style="margin-right:3px;"></i>Pro V5 Squeezed</span>';
       } else if (strategy === 'weighted_score') {
@@ -1099,6 +1103,16 @@ async function runMarketScan() {
           detailLabel = 'Histogram chuyển màu (Đỏ nhạt → Đỏ đậm) + Vol đột biến &ge; 1,1x TB20';
           recommendation = '🟢 MUA (Đảo chiều sớm)';
           recommendationClass = 'buy';
+        } else if (strategy === 'rsi_divergence_pure') {
+          strategyLabel = '<span style="color:#06b6d4;font-weight:600;"><i class="fa-solid fa-chart-line" style="margin-right:4px;"></i>Phân kỳ RSI</span>';
+          detailLabel = 'Phát hiện Phân kỳ dương RSI (RSI Bullish Divergence) vùng quá bán < 40';
+          recommendation = '🟢 MUA (Theo dõi đảo chiều)';
+          recommendationClass = 'buy';
+        } else if (strategy === 'rsi_divergence_combo') {
+          strategyLabel = '<span style="color:#a855f7;font-weight:600;"><i class="fa-solid fa-crown" style="margin-right:4px;"></i>Combo RSI Tối ưu</span>';
+          detailLabel = 'Phân kỳ dương RSI + Vol bùng nổ &ge; 1,15x TB20 + Nến đảo chiều xanh/búa';
+          recommendation = '🏆 MUA MẠNH (Tỷ lệ thắng 70%)';
+          recommendationClass = 'strong';
         } else {
           strategyLabel = '<span style="color:#8b5cf6;font-weight:600;"><i class="fa-solid fa-list-check" style="margin-right:4px;"></i>Đồng thuận chỉ báo</span>';
           
@@ -1158,6 +1172,207 @@ async function runMarketScan() {
     setTimeout(() => {
       if (progressContainer) progressContainer.style.display = 'none';
     }, 1500);
+  }
+}
+
+
+// ===== GOOGLE DEEP RESEARCH =====
+async function runDeepResearch() {
+  const key = getGeminiKey();
+  if (!key) { showToast('Vui lòng nhập Gemini API Key ở sidebar!', 'error'); return; }
+  if (!stockData) { showToast('Vui lòng tìm kiếm mã cổ phiếu trước!', 'error'); return; }
+
+  const btn = $('btn-run-deepsearch');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div> Đang nghiên cứu...';
+
+  // Show status logger
+  const statusWrap = $('ds-status-wrap');
+  const statusText = $('ds-status-text');
+  const statusSub = $('ds-status-sub');
+  
+  if (statusWrap) statusWrap.style.display = 'block';
+  if (statusText) statusText.textContent = 'Khởi động tác vụ Google Deep Research...';
+  if (statusSub) statusSub.textContent = 'Đang thiết lập kết nối an toàn tới Google Search API...';
+
+  const output = $('ds-output');
+  output.className = 'ai-output streaming';
+  output.innerHTML = '<div style="color:var(--blue-bright); margin-bottom:8px;"><div class="spinner" style="display:inline-block;margin-right:8px;border-top-color:var(--blue-bright);"></div>Đang lập kế hoạch nghiên cứu...</div>';
+
+  const sourcesWrap = $('ds-sources-wrap');
+  const sourcesList = $('ds-sources-list');
+  if (sourcesWrap) sourcesWrap.style.display = 'none';
+  if (sourcesList) sourcesList.innerHTML = '';
+
+  // Lấy chỉ báo hiện tại để đưa vào ngữ cảnh
+  const { analysis, ticker, last_date, support, resistance } = stockData;
+  const { price, price_change, price_change_pct, signals } = analysis;
+  const macd = signals.macd || {};
+  const ma = signals.ma || {};
+  const bb = signals.bb || {};
+  const vol = signals.volume || {};
+
+  const mode = $('ds-mode').value || 'deep';
+
+  const prompt = `Bạn là một Chuyên gia Phân tích Hành vi Giá & Dòng tiền Tạo lập (Market Maker / Smart Money Flow Analyst) với hơn 20 năm kinh nghiệm thực chiến tại thị trường chứng khoán Việt Nam.
+Hãy thực hiện một báo cáo Nghiên cứu Chuyên sâu (Deep Research) về mã cổ phiếu ${ticker} tại thị trường chứng khoán Việt Nam.
+
+Để hỗ trợ bạn, dưới đây là dữ liệu kỹ thuật hiện tại của cổ phiếu:
+- Ngày cập nhật gần nhất: ${last_date}
+- Giá đóng cửa gần đây nhất: ${price} (Thay đổi: ${price_change >= 0 ? '+' : ''}${price_change} / ${price_change_pct}%)
+- Hỗ trợ: ${support} | Kháng cự: ${resistance}
+- MA10: ${ma.ma10 || 'N/A'} | MA50: ${ma.ma50 || 'N/A'} | Xu hướng MA: ${ma.label || 'N/A'}
+- MACD Line: ${macd.macd || 'N/A'} | Signal: ${macd.signal_line || 'N/A'} | Histogram: ${macd.histogram || 'N/A'}
+- Bollinger Bands: BB Upper: ${bb.upper || 'N/A'} | BB Lower: ${bb.lower || 'N/A'}
+- Volume hôm nay: ${vol.today ? (vol.today/1000).toFixed(0)+'K' : 'N/A'} | TB20: ${vol.ma20 ? (vol.ma20/1000).toFixed(0)+'K' : 'N/A'} (Tỷ lệ: ${vol.ratio || 'N/A'}x)
+
+Hãy sử dụng Google Search Grounding để thu thập thông tin trực tuyến nóng hổi thời gian thực liên quan đến cổ phiếu ${ticker} trong các tuần và tháng gần đây. Hãy viết một báo cáo cực kỳ thực chiến, chuyên nghiệp và có chiều sâu (tránh lý thuyết sáo rỗng) để phân tách rõ ràng các mục sau:
+
+1. PHÂN TÍCH GIAO DỊCH TRONG PHIÊN & HÀNH VI TẠO LẬP (INTRADAY BEHAVIOR):
+   Dựa trên biến động kỹ thuật và tin tức giao dịch thu thập được trên internet, hãy phân tích để người dùng nhìn ra dấu hiệu gom hàng hay xả hàng của dòng tiền lớn (Smart Money):
+   - Phân tích các bất thường giao dịch trong phiên gần đây (nếu có): Khối lượng giao dịch đột biến tại các khung giờ cụ thể, cơ cấu mua/bán chủ động, chênh lệch cung cầu (Bid-Ask Spread).
+   - Chỉ rõ các dấu hiệu GOM HÀNG (Accumulation) của tạo lập: Kìm giá đi ngang tích lũy, các nhịp "Ép bán - Rũ bỏ" (Shakeout) giảm sâu rồi rút chân nhanh trong phiên với volume lớn, hoặc có lệnh lớn gom hàng âm thầm bảo vệ các mốc hỗ trợ cứng.
+   - Chỉ rõ các dấu hiệu XẢ HÀNG/KÉO XẢ (Distribution): Giá kéo tăng mạnh fomo đầu phiên nhưng bị bán cụt đầu cuối phiên hoặc sát ATC kèm volume lớn, dao động biên rộng vùng đỉnh nhưng không thể bứt phá, kê lệnh ảo bên mua để xả thẳng tay bên bán.
+
+2. PHÂN TÍCH TIN ĐỒN & THÔNG TIN TÁC ĐỘNG (RUMORS & NEWS ANALYSIS):
+   - Thu thập các đồn đoán, tin đồn rò rỉ, tin tức nội bộ tiềm năng trên các diễn đàn lớn (F319, các hội nhóm Facebook, Telegram lớn) hoặc báo chí chính thống.
+   - Liệt kê và phân tích tác động cụ thể thành 2 nhóm rõ ràng:
+     * CÁC THÔNG TIN TIỀM NĂNG CÓ LỢI (Bullish Catalyst): như dự án mới được cấp phép, kế hoạch tăng vốn, kết quả kinh doanh quý tới ước đạt tích cực, có đối tác chiến lược...
+     * CÁC THÔNG TIN TIỀM NĂNG CÓ HẠI (Bearish Catalyst): như vướng mắc pháp lý dự án, nợ vay quá lớn, tin đồn thanh tra, biến động nhân sự cấp cao...
+   
+3. TRIỂN VỌNG DÒNG TIỀN & PHƯƠNG ÁN GIAO DỊCH CHO DANH MỤC:
+   - Tổng hợp đánh giá xem Dòng tiền tạo lập hiện tại đang nghiêng về xu thế tích lũy gom hàng tiếp tục hay đang phân phối thoát hàng.
+   - Khuyến nghị cụ thể cho danh mục: [MUA/BÁN/THEO DÕI] kèm mức độ tin cậy.
+   - Đưa ra kế hoạch hành động cụ thể để người dùng chủ động: Vùng giá gom an toàn, điểm cắt lỗ cứng để bảo vệ vốn, và các điểm chốt lời kỳ vọng.
+
+YÊU CẦU TRÍCH NGUỒN CỤ THỂ (CITATIONS REQUIRED):
+Với mỗi tin tức vĩ mô, đồn đoán rò rỉ, hay giao dịch bất thường được đưa ra trong báo cáo, bạn BẮT BUỘC phải ghi rõ nguồn trích dẫn lấy từ đâu (như CafeF, Vietstock, VnEconomy, diễn đàn F319, hội nhóm chứng khoán Telegram...) và đặt đường link bài viết/nguồn đó trực tiếp trong bài phân tích dưới dạng markdown [Tên nguồn](URL). Không tự tiện bịa đặt nguồn hoặc liên kết không tồn tại.
+
+Hãy trả lời bằng tiếng Việt, rõ ràng và mạch lạc.`;
+
+  const model = $('gemini-model-select').value || 'gemini-3.5-flash';
+  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent`;
+
+  let updateLoggerInterval = null;
+  let currentLogStepIndex = 0;
+  const logSteps = [
+    'Đang lập kế hoạch nghiên cứu & phân tích cú pháp...',
+    'Đang truy cập công cụ tìm kiếm Google Search...',
+    'Đang truy vấn tin tức vĩ mô & tin đồn về doanh nghiệp...',
+    'Đang bóc tách dữ liệu giao dịch trong phiên và cấu trúc lệnh...',
+    'Đang tổng hợp thông tin và viết báo cáo chuyên sâu...',
+  ];
+
+  if (statusText) {
+    updateLoggerInterval = setInterval(() => {
+      if (currentLogStepIndex < logSteps.length - 1) {
+        currentLogStepIndex++;
+        statusText.textContent = `Google Deep Research — Bước ${currentLogStepIndex + 1}/${logSteps.length}`;
+        statusSub.textContent = logSteps[currentLogStepIndex];
+      }
+    }, 2800);
+  }
+
+  try {
+    const response = await fetch(`${apiUrl}?key=${key}&alt=sse`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        tools: [{ googleSearch: {} }], // Kích hoạt Google Search Grounding
+        generationConfig: {
+          temperature: 0.2,
+          maxOutputTokens: 8192
+        }
+      })
+    });
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error?.message || 'Lỗi kết nối Gemini API');
+    }
+
+    clearInterval(updateLoggerInterval);
+    if (statusText) statusText.textContent = 'Đang nhận báo cáo nghiên cứu tình báo...';
+    if (statusSub) statusSub.textContent = 'Dòng dữ liệu đang được phân tích và hiển thị trực tiếp...';
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let fullText = '';
+    output.innerHTML = '';
+    let groundingData = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value);
+      const lines = chunk.split('\n');
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const json = JSON.parse(line.slice(6));
+            const part = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            fullText += part;
+            
+            const metadata = json.candidates?.[0]?.groundingMetadata;
+            if (metadata) {
+              groundingData = metadata;
+            }
+
+            output.innerHTML = marked.parse(fullText) + '<span class="pulse" style="display:inline-block;width:8px;height:14px;background:var(--blue-bright);border-radius:2px;margin-left:2px;vertical-align:middle;"></span>';
+            output.scrollTop = output.scrollHeight;
+          } catch {}
+        }
+      }
+    }
+
+    output.innerHTML = marked.parse(fullText);
+    
+    if (statusWrap) statusWrap.style.display = 'none';
+
+    if (groundingData && groundingData.groundingChunks && groundingData.groundingChunks.length > 0) {
+      if (sourcesWrap) sourcesWrap.style.display = 'block';
+      if (sourcesList) {
+        sourcesList.innerHTML = '';
+        groundingData.groundingChunks.forEach(chunk => {
+          if (chunk.web) {
+            const item = document.createElement('a');
+            item.className = 'source-item';
+            item.href = chunk.web.uri;
+            item.target = '_blank';
+            item.title = chunk.web.title;
+            
+            let domain = 'Website';
+            try {
+              domain = new URL(chunk.web.uri).hostname.replace('www.', '');
+            } catch {}
+
+            item.innerHTML = `
+              <i class="fa-solid fa-file-invoice-dollar"></i>
+              <span class="source-title">${chunk.web.title}</span>
+              <span class="source-domain">${domain}</span>
+            `;
+            sourcesList.appendChild(item);
+          }
+        });
+      }
+    } else {
+      if (sourcesWrap) sourcesWrap.style.display = 'none';
+    }
+
+    showToast('✅ Đã hoàn thành Google Deep Research!', 'success');
+
+  } catch (err) {
+    clearInterval(updateLoggerInterval);
+    if (statusWrap) statusWrap.style.display = 'none';
+    output.innerHTML = `<div style="color:var(--red);padding:14px;background:rgba(239,68,68,0.08);border-radius:6px;font-size:12.5px;line-height:1.5;">
+      ❌ <strong>Lỗi thực hiện Deep Research:</strong> ${err.message}<br/>
+      <small style="color:var(--text-muted);display:block;margin-top:4px;">Hãy kiểm tra lại API Key, model đang chọn và kết nối mạng.</small>
+    </div>`;
+    showToast(`Lỗi: ${err.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-brain"></i> Bắt đầu nghiên cứu';
   }
 }
 

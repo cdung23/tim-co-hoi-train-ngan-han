@@ -1,10 +1,7 @@
 @echo off
-chcp 65001 > nul
-set PYTHONIOENCODING=utf-8
 
-echo.
 echo ============================================
-echo  📊 KHỞI ĐỘNG HỆ THỐNG PHÂN TÍCH STOCKAI
+echo  KHOI DONG HE THONG PHAN TICH STOCKAI
 echo ============================================
 echo.
 
@@ -14,20 +11,20 @@ if errorlevel 1 (
     if exist "C:\Program Files\Python311\python.exe" (
         set "PYTHON_CMD=C:\Program Files\Python311\python.exe"
     ) else (
-        echo ❌ Không tìm thấy Python! Vui lòng cài đặt Python.
+        echo Khong tim thay Python! Vui long cai dat Python.
         pause
         exit /b 1
     )
 )
 
-echo [1/2] Đang khởi động Backend API trong cửa sổ mới...
+echo [1/2] Dang khoi dong Backend API trong cua so moi...
 start "StockAI Backend" cmd /c "cd backend && start.bat"
 
 echo.
-echo [2/2] Đang khởi động Frontend Web Server...
-echo 🌐 Ứng dụng sẽ chạy tại địa chỉ: http://localhost:3000
+echo [2/2] Dang khoi dong Frontend Web Server...
+echo Ung dung se chay tai dia chi: http://localhost:3000
 echo.
-echo Nhấn Ctrl+C để dừng server.
+echo Nhan Ctrl+C de dung server.
 echo.
 
 "%PYTHON_CMD%" -m http.server 3000 --directory frontend

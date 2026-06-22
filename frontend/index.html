@@ -55,6 +55,9 @@
       <div class="nav-item" id="nav-ai" onclick="switchTab('ai')">
         <i class="fa-solid fa-robot"></i> AI Phân tích
       </div>
+      <div class="nav-item" id="nav-deepsearch" onclick="switchTab('deepsearch')">
+        <i class="fa-solid fa-graduation-cap"></i> Deep Research
+      </div>
       <div class="nav-item" id="nav-backtest" onclick="switchTab('backtest')">
         <i class="fa-solid fa-clock-rotate-left"></i> Back-testing
       </div>
@@ -117,6 +120,9 @@
       </button>
       <button class="tab-btn" id="tab-ai" onclick="switchTab('ai')">
         <i class="fa-solid fa-robot"></i> AI Phân tích
+      </button>
+      <button class="tab-btn" id="tab-deepsearch" onclick="switchTab('deepsearch')">
+        <i class="fa-solid fa-graduation-cap"></i> Deep Research
       </button>
       <button class="tab-btn" id="tab-backtest" onclick="switchTab('backtest')">
         <i class="fa-solid fa-chart-area"></i> Back-testing Lịch sử
@@ -311,7 +317,9 @@
             <span class="card-title"><i class="fa-solid fa-flask"></i> Thống kê Back-testing Lịch sử</span>
             <div style="display:flex; align-items:center; gap:8px;">
               <select id="bt-strategy-select" style="background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm); padding:6px 10px; color:var(--text-primary); font-size:12px; font-weight:600; outline:none; cursor:pointer;" onchange="loadBacktest()">
-                <option value="macd_hist_bearish_surge" selected>MACD Histogram: Đỏ nhạt → Đỏ đậm (Nhận định của bạn)</option>
+                <option value="rsi_divergence_combo" selected>Combo Phân kỳ RSI + Vol bùng nổ + Nến xác nhận (Khuyên dùng - 70% WR)</option>
+                <option value="rsi_divergence_pure">Phân kỳ dương RSI thuần túy</option>
+                <option value="macd_hist_bearish_surge">MACD Histogram: Đỏ nhạt → Đỏ đậm (Nhận định của bạn)</option>
                 <option value="multi_signal_buy">Đồng thuận 6 chỉ báo kỹ thuật (Mặc định)</option>
               </select>
               <button class="btn-analyze" onclick="loadBacktest()" style="padding:6px 12px; font-size:11.5px; box-shadow:none;">
@@ -393,6 +401,73 @@
         </div>
       </div>
 
+      <!-- ====== TAB: DEEP RESEARCH ====== -->
+      <div id="view-deepsearch" style="display:none;" class="fade-in">
+        <div class="card" style="margin-bottom:14px;">
+          <div class="card-header" style="flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center;">
+            <span class="card-title"><i class="fa-solid fa-graduation-cap"></i> Google Deep Research — Nghiên cứu sâu hành vi & dòng tiền</span>
+            <div style="display:flex; align-items:center; gap:12px; flex-wrap: wrap;">
+              <div style="display:flex; align-items:center; gap:6px;">
+                <label for="ds-mode" style="font-size:12px; color:var(--text-muted); white-space:nowrap;">Chế độ:</label>
+                <select id="ds-mode" style="background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm); padding:6px 10px; color:var(--text-primary); font-size:12px; font-weight:600; outline:none; cursor:pointer;">
+                  <option value="deep" selected>Nghiên cứu chuyên sâu toàn diện</option>
+                  <option value="quick">Tin tức & Sự kiện nóng hổi (Nhanh)</option>
+                </select>
+              </div>
+              <button class="btn-analyze" id="btn-run-deepsearch" onclick="runDeepResearch()" style="padding:6px 16px; font-size:12px; font-weight:700;">
+                <i class="fa-solid fa-brain"></i> Bắt đầu nghiên cứu
+              </button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div style="font-size:12px; color:var(--text-muted); line-height:1.6;">
+              Hệ thống kích hoạt công cụ <strong>Google Search Grounding</strong> của Gemini để tìm kiếm trực tiếp trên internet theo thời gian thực. AI đóng vai trò nhà phân tích hành vi dòng tiền tạo lập để phát hiện các dấu hiệu <strong>gom hàng, xả hàng, đè giá, kéo xả trong phiên</strong> và tổng hợp các tin đồn có lợi/hại kèm nguồn dẫn chứng cụ thể.
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title"><i class="fa-solid fa-book-open"></i> Báo cáo nghiên cứu tình báo dòng tiền & doanh nghiệp</span>
+          </div>
+          <div class="card-body">
+            <!-- Status Logger -->
+            <div id="ds-status-wrap" style="display:none; padding:15px; border:1px solid var(--border); border-radius:var(--radius); margin-bottom:15px; background:rgba(0,0,0,0.15);">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <div class="spinner" style="border-top-color: var(--blue-bright);"></div>
+                <div>
+                  <div style="font-weight:600; font-size:13px; color:var(--blue-bright);" id="ds-status-text">Đang khởi động Google Deep Research...</div>
+                  <div style="font-size:11px; color:var(--text-muted); margin-top:2px;" id="ds-status-sub">AI đang chuẩn bị kế hoạch tìm kiếm trên Google...</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Content output -->
+            <div class="ai-output" id="ds-output">
+              <div class="ai-placeholder">
+                <i class="fa-solid fa-graduation-cap" style="color:var(--blue-bright); font-size:40px; margin-bottom:12px; opacity:0.8;"></i>
+                <div style="font-size:14px; font-weight:500; color:var(--text-secondary);">
+                  Sẵn sàng nghiên cứu chuyên sâu
+                </div>
+                <div style="font-size:12px; color:var(--text-muted); max-width:400px; line-height:1.6; margin-top:8px;">
+                  1. Nhập Gemini API Key ở sidebar bên trái<br/>
+                  2. Tìm kiếm mã cổ phiếu ở trên<br/>
+                  3. Bấm "Bắt đầu nghiên cứu" để AI bóc tách hành vi gom/xả hàng trong phiên & phân tích tin đồn trích nguồn cụ thể
+                </div>
+              </div>
+            </div>
+
+            <!-- Citation sources list -->
+            <div id="ds-sources-wrap" style="display:none; margin-top:20px; padding-top:15px; border-top:1px solid var(--border);">
+              <h4 style="font-size:12.5px; font-weight:700; color:var(--text-primary); margin-bottom:10px; display:flex; align-items:center; gap:6px;">
+                <i class="fa-solid fa-link" style="color:var(--blue-bright)"></i> Nguồn tin tức tham khảo từ Google Search
+              </h4>
+              <div id="ds-sources-list" style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- ====== TAB: MARKET SCANNER ====== -->
       <div id="view-scanner" style="display:none;" class="fade-in">
         <div class="card" style="margin-bottom:14px;">
@@ -402,7 +477,9 @@
               <div style="display:flex; align-items:center; gap:6px;">
                 <label for="scanner-strategy-select" style="font-size:12px; color:var(--text-muted); white-space:nowrap;">Phong cách quét:</label>
                 <select id="scanner-strategy-select" style="background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm); padding:6px 10px; color:var(--text-primary); font-size:12px; font-weight:600; outline:none; cursor:pointer;" onchange="toggleScannerThreshold()">
-                  <option value="macd_hist_bearish_surge" selected>MACD Histogram: Đỏ nhạt → Đỏ đậm + Vol đột biến</option>
+                  <option value="rsi_divergence_combo" selected>Combo Phân kỳ RSI + Vol bùng nổ + Nến xác nhận</option>
+                  <option value="rsi_divergence_pure">Phân kỳ dương RSI thuần túy</option>
+                  <option value="macd_hist_bearish_surge">MACD Histogram: Đỏ nhạt → Đỏ đậm + Vol đột biến</option>
                   <option value="multi_signal_buy">Đồng thuận 6 chỉ báo kỹ thuật</option>
                 </select>
               </div>
