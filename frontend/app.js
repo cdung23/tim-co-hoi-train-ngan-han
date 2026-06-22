@@ -69,10 +69,14 @@ function setupKeyInput() {
   const modelSelect = $('gemini-model-select');
 
   // Load saved key
-  const saved = localStorage.getItem('gemini_api_key');
+  const defaultKey = '';
+  const saved = localStorage.getItem('gemini_api_key') || defaultKey;
   if (saved) {
     inp.value = saved;
     dot.classList.add('active');
+    if (!localStorage.getItem('gemini_api_key') && defaultKey) {
+      localStorage.setItem('gemini_api_key', defaultKey);
+    }
   }
 
   // Load saved model
@@ -105,7 +109,8 @@ function setupKeyInput() {
 }
 
 function getGeminiKey() {
-  return ($('gemini-key-input').value || '').trim();
+  const defaultKey = '';
+  return ($('gemini-key-input').value || '').trim() || defaultKey;
 }
 
 // ===== SEARCH =====
