@@ -623,6 +623,224 @@ def get_stock_news(ticker: str):
     return {"status": "success", "ticker": ticker, "news": cleaned_news}
 
 
+@app.get("/api/stock/{ticker}/intraday")
+def get_stock_intraday(ticker: str):
+    """
+    Lấy dữ liệu giao dịch trong phiên (tick data) và phân tích tỷ lệ mua/bán, gom/xả của cá mập
+    """
+    try:
+        from vnstock import Quote
+        ticker = ticker.upper().strip()
+        
+        # Gọi API intraday của vnstock với nguồn KBS (hỗ trợ trang lớn hơn)
+        q = Quote(symbol=ticker, source="kbs")
+        df = q.intraday(page_size=3000) # Lấy tối đa 3000 tick khớp lệnh gần nhất
+        
+        if df is None or df.empty:
+            return {
+                "status": "success",
+                "ticker": ticker,
+                "total_rows": 0,
+                "summary": {},
+                "large_orders": [],
+                "shark_stats": {}
+            }
+            
+        # Các cột: time, price, volume, match_type/a
+        # Chuẩn hóa cột
+        df = df.rename(columns={
+            'a': 'match_type', # dự phòng phiên bản cũ
+            'g': 'action',
+            'c': 'color'
+        })
+        
+        # Bảo đảm các kiểu dữ liệu
+        df['price'] = df['price'].astype(float)
+        df['volume'] = df['volume'].astype(int)
+        df['value'] = df['price'] * df['volume'] * 1000.0 # Giá trị khớp tính bằng VNĐ (ở sàn VN giá hiển thị chia 1000)
+        
+        # Mặc định match_type là buy/sell hoặc BU/SD (KBS có thể dùng buy/sell hoặc BU/SD)
+        # Hãy chuẩn hóa match_type sang 'buy', 'sell' hoặc 'neutral'
+        def normalize_match_type(val):
+            val = str(val).lower().strip()
+            if val in ['buy', 'bu', 'b']: return 'buy'
+            if val in ['sell', 'sd', 's']: return 'sell'
+            return 'neutral'
+            
+        df['match_type'] = df['match_type'].apply(normalize_match_type)
+        
+        # Tính toán tổng hợp dòng tiền
+        buy_df = df[df['match_type'] == 'buy']
+        sell_df = df[df['match_type'] == 'sell']
+        neutral_df = df[df['match_type'] == 'neutral']
+        
+        buy_vol = int(buy_df['volume'].sum())
+        buy_val = float(buy_df['value'].sum())
+        
+        sell_vol = int(sell_df['volume'].sum())
+        sell_val = float(sell_df['value'].sum())
+        
+        neutral_vol = int(neutral_df['volume'].sum())
+        neutral_val = float(neutral_df['value'].sum())
+        
+        total_vol = buy_vol + sell_vol + neutral_vol
+        total_val = buy_val + sell_val + neutral_val
+        
+        # Phân tích lệnh lớn của Cá mập (Shark Tracker)
+        # Quy định: Lệnh khớp >= 20,000 cổ phiếu HOẶC giá trị khớp >= 500 triệu VNĐ
+        shark_vol_threshold = 20000
+        shark_val_threshold = 500000000.0
+        
+        df_shark = df[(df['volume'] >= shark_vol_threshold) | (df['value'] >= shark_val_threshold)]
+        
+        large_orders = []
+        for _, row in df_shark.iterrows():
+            large_orders.append({
+                "time": str(row['time']),
+                "price": float(row['price']),
+                "volume": int(row['volume']),
+                "value": float(row['value']),
+                "type": row['match_type']
+            })
+            
+        # Thống kê cá mập mua/bán
+        shark_buy_df = df_shark[df_shark['match_type'] == 'buy']
+        shark_sell_df = df_shark[df_shark['match_type'] == 'sell']
+        
+        shark_buy_vol = int(shark_buy_df['volume'].sum())
+        shark_buy_val = float(shark_buy_df['value'].sum())
+        
+        shark_sell_vol = int(shark_sell_df['volume'].sum())
+        shark_sell_val = float(shark_sell_df['value'].sum())
+        
+        return {
+            "status": "success",
+            "ticker": ticker,
+            "total_rows": len(df),
+            "summary": {
+                "total_volume": total_vol,
+                "total_value": total_val,
+                "buy_active_volume": buy_vol,
+                "buy_active_value": buy_val,
+                "sell_active_volume": sell_vol,
+                "sell_active_value": sell_val,
+                "neutral_volume": neutral_vol,
+                "neutral_value": neutral_val,
+                "net_active_volume": buy_vol - sell_vol,
+                "net_active_value": buy_val - sell_val
+            },
+            "shark_stats": {
+                "threshold_volume": shark_vol_threshold,
+                "threshold_value": shark_val_threshold,
+                "total_shark_orders": len(df_shark),
+                "shark_buy_volume": shark_buy_vol,
+                "shark_buy_value": shark_buy_val,
+                "shark_sell_volume": shark_sell_vol,
+                "shark_sell_value": shark_sell_val,
+                "shark_net_volume": shark_buy_vol - shark_sell_vol,
+                "shark_net_value": shark_buy_val - shark_sell_val
+            },
+            "large_orders": large_orders[:100] # Trả về tối đa 100 lệnh cá mập mới nhất
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi lấy dữ liệu giao dịch trong phiên: {str(e)}")
+
+
+@app.get("/api/stock/{ticker}/put-through")
+def get_stock_put_through(ticker: str):
+    """
+    Lấy danh sách các giao dịch thỏa thuận của cổ phiếu trong ngày và phát hiện dấu hiệu đáng ngờ
+    """
+    import requests
+    ticker = ticker.upper().strip()
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Referer": "https://iboard.ssi.com.vn/"
+    }
+    
+    all_trades = []
+    
+    # 1. Gọi API thỏa thuận của sàn HOSE và HNX trên SSI iBoard
+    for exchange in ['hose', 'hnx']:
+        url = f"https://iboard-query.ssi.com.vn/v2/stock/negotiated-trades?exchange={exchange}"
+        try:
+            r = requests.get(url, headers=headers, timeout=10)
+            if r.status_code == 200:
+                res_data = r.json()
+                trades = res_data.get('data', [])
+                if isinstance(trades, list):
+                    all_trades.extend(trades)
+        except Exception as e:
+            print(f"[Put-through Scraper] Lỗi lấy giao dịch sàn {exchange.upper()}: {str(e)}")
+            
+    # 2. Lọc theo cổ phiếu hiện tại
+    stock_trades = [t for t in all_trades if str(t.get('symbol', '')).upper() == ticker]
+    
+    # 3. Lấy giá đóng cửa phiên trước/gần nhất để làm giá tham chiếu so sánh
+    last_close = 0.0
+    try:
+        df_price = fetch_ohlcv(ticker, months=1)
+        if df_price is not None and not df_price.empty:
+            last_close = float(df_price.iloc[-1]['close'])
+    except Exception as e:
+        print(f"[Put-through Scraper] Lỗi lấy giá đóng cửa gần nhất: {str(e)}")
+        
+    # 4. Phân tích phát hiện giao dịch bất thường
+    analyzed_trades = []
+    for trade in stock_trades:
+        price = float(trade.get('price', 0.0))
+        volume = int(trade.get('volume', 0))
+        value = price * volume * 1000.0 # Giá trị giao dịch thỏa thuận (VNĐ)
+        time_str = trade.get('time', '--:--:--')
+        trade_id = trade.get('id', 0)
+        
+        # So sánh chênh lệch % giá
+        diff_pct = 0.0
+        if last_close > 0:
+            diff_pct = round(((price - last_close) / last_close) * 100, 2)
+            
+        # Phân loại độ tin cậy/mức độ bất thường
+        warnings = []
+        
+        # Cảnh báo 1: Chênh lệch giá lớn hơn +-5% so với giá sàn khớp lệnh
+        if abs(diff_pct) >= 5.0:
+            warnings.append("Chênh lệch giá cao")
+            
+        # Cảnh báo 2: Khối lượng giao dịch cực lớn (trên 500,000 cổ phiếu hoặc > 15 tỷ VNĐ)
+        if volume >= 500000 or value >= 15000000000.0:
+            warnings.append("Khối lượng đột biến")
+            
+        if len(warnings) >= 2:
+            status_label = "⚠️ Đáng ngờ"
+        elif len(warnings) == 1:
+            status_label = "💡 Bất thường"
+        else:
+            status_label = "🟢 Bình thường"
+            
+        analyzed_trades.append({
+            "id": trade_id,
+            "time": time_str,
+            "price": price,
+            "volume": volume,
+            "value": value,
+            "diff_pct": diff_pct,
+            "ref_price": last_close,
+            "status": status_label,
+            "anomaly_reason": ", ".join(warnings) if warnings else "Không có"
+        })
+        
+    # Sắp xếp theo thời gian mới nhất
+    analyzed_trades.sort(key=lambda x: x["time"], reverse=True)
+    
+    return {
+        "status": "success",
+        "ticker": ticker,
+        "total_trades": len(analyzed_trades),
+        "ref_price": last_close,
+        "trades": analyzed_trades
+    }
+
 
 if __name__ == "__main__":
     import uvicorn
@@ -630,3 +848,4 @@ if __name__ == "__main__":
     print("[Server] Truy cap: http://localhost:8000")
     print("[Server] API Docs: http://localhost:8000/docs")
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)
+

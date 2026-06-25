@@ -1226,4 +1226,59 @@ body {
   font-family: 'JetBrains Mono', monospace;
 }
 
+/* Intraday Flow Chart Style */
+.flow-bar-container {
+  height: 24px;
+  background: var(--red); /* Phía dưới là lực bán đỏ */
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
+  border: 1px solid rgba(255,255,255,0.05);
+}
+.flow-bar-fill {
+  height: 100%;
+  background: var(--green); /* Lực mua xanh phủ lên từ bên trái */
+  width: 50%;
+  transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 2px 0 10px rgba(16, 185, 129, 0.4);
+}
+
+.text-green {
+  color: var(--green) !important;
+}
+.text-red {
+  color: var(--red) !important;
+}
+
+/* Status Badges */
+.badge-warning {
+  background: rgba(245, 158, 11, 0.15) !important;
+  color: var(--amber-bright) !important;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+.badge-danger {
+  background: rgba(244, 63, 94, 0.15) !important;
+  color: var(--red) !important;
+  border: 1px solid rgba(244, 63, 94, 0.3);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+.badge-success {
+  background: rgba(16, 185, 129, 0.15) !important;
+  color: var(--green) !important;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+
 

@@ -58,6 +58,9 @@
       <div class="nav-item" id="nav-deepsearch" onclick="switchTab('deepsearch')">
         <i class="fa-solid fa-graduation-cap"></i> Deep Research
       </div>
+      <div class="nav-item" id="nav-intraday" onclick="switchTab('intraday')">
+        <i class="fa-solid fa-right-left"></i> Dòng tiền & Thỏa thuận
+      </div>
       <div class="nav-item" id="nav-backtest" onclick="switchTab('backtest')">
         <i class="fa-solid fa-clock-rotate-left"></i> Back-testing
       </div>
@@ -123,6 +126,9 @@
       </button>
       <button class="tab-btn" id="tab-deepsearch" onclick="switchTab('deepsearch')">
         <i class="fa-solid fa-graduation-cap"></i> Deep Research
+      </button>
+      <button class="tab-btn" id="tab-intraday" onclick="switchTab('intraday')">
+        <i class="fa-solid fa-right-left"></i> Dòng tiền & Thỏa thuận
       </button>
       <button class="tab-btn" id="tab-backtest" onclick="switchTab('backtest')">
         <i class="fa-solid fa-chart-area"></i> Back-testing Lịch sử
@@ -564,6 +570,126 @@
                   </tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== TAB: INTRADAY & PUT-THROUGH ====== -->
+      <div id="view-intraday" style="display:none;" class="fade-in">
+        <!-- Summary Cards -->
+        <div class="kpi-row" style="margin-bottom:14px;">
+          <div class="kpi-card">
+            <div class="kpi-label"><i class="fa-solid fa-calculator" style="color:var(--cyan)"></i> Tổng khớp trong phiên</div>
+            <div class="kpi-value" id="intra-kpi-vol">--</div>
+            <div class="kpi-sub" id="intra-kpi-val">Giá trị: -- VNĐ</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label"><i class="fa-solid fa-arrow-trend-up" style="color:var(--green)"></i> Mua chủ động</div>
+            <div class="kpi-value text-green" id="intra-kpi-buy-vol">--</div>
+            <div class="kpi-sub" id="intra-kpi-buy-val">Giá trị: -- VNĐ</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label"><i class="fa-solid fa-arrow-trend-down" style="color:var(--red)"></i> Bán chủ động</div>
+            <div class="kpi-value text-red" id="intra-kpi-sell-vol">--</div>
+            <div class="kpi-sub" id="intra-kpi-sell-val">Giá trị: -- VNĐ</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label"><i class="fa-solid fa-scale-balanced" style="color:var(--purple)"></i> Net chủ động (Gom/Xả)</div>
+            <div class="kpi-value" id="intra-kpi-net-vol">--</div>
+            <div class="kpi-sub" id="intra-kpi-net-val">Net value: -- VNĐ</div>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-bottom:16px;">
+          <!-- Flow Bar Indicator Card -->
+          <div class="card" style="grid-column: 1 / -1;">
+            <div class="card-header">
+              <span class="card-title"><i class="fa-solid fa-scale-unbalanced-flip"></i> Tương quan Dòng tiền khớp lệnh chủ động trong phiên</span>
+              <button class="btn-search" onclick="refreshIntradayData()" title="Làm mới dữ liệu" style="width:32px; height:32px;">
+                <i class="fa-solid fa-rotate"></i>
+              </button>
+            </div>
+            <div class="card-body" style="padding:24px 20px;">
+              <div style="display:flex; justify-content:space-between; font-size:12.5px; font-weight:700; margin-bottom:8px;">
+                <span class="text-green">🟢 Mua chủ động (Ăn lên): <span id="intra-flow-buy-pct">0%</span></span>
+                <span class="text-red">🔴 Bán chủ động (Xả xuống): <span id="intra-flow-sell-pct">0%</span></span>
+              </div>
+              <div class="flow-bar-container">
+                <div class="flow-bar-fill" id="intra-flow-bar" style="width: 50%;"></div>
+              </div>
+              <div style="font-size:11px; color:var(--text-muted); text-align:center; margin-top:8px;" id="intra-flow-verdict">
+                Đang phân tích cấu trúc dòng tiền...
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
+          <!-- Shark Tracker (Large Orders) -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title"><i class="fa-solid fa-fish-fins"></i> Theo vết Cá mập (Lệnh khớp &ge; 20k CP hoặc &ge; 500tr VNĐ)</span>
+              <span style="font-size:12px; color:var(--text-muted);" id="intra-shark-count">Khớp: -- lệnh</span>
+            </div>
+            <div class="card-body" style="padding:0;">
+              <!-- Shark Stats Summary inside body -->
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:12px; border-bottom:1px solid var(--border); background:rgba(0,0,0,0.1); font-size:11.5px;">
+                <div style="color:var(--text-muted)">Cá mập Mua: <span id="intra-shark-buy" class="text-green font-mono" style="font-weight:700;">--</span></div>
+                <div style="color:var(--text-muted)">Cá mập Bán: <span id="intra-shark-sell" class="text-red font-mono" style="font-weight:700;">--</span></div>
+                <div style="color:var(--text-muted); grid-column: 1 / -1; border-top: 1px dashed var(--border); padding-top:6px;">Net cá mập ròng: <span id="intra-shark-net" class="font-mono" style="font-weight:800;">--</span></div>
+              </div>
+              <div class="backtest-table-wrap" style="max-height:450px; overflow-y:auto;">
+                <table class="backtest-table">
+                  <thead>
+                    <tr>
+                      <th>Thời gian</th>
+                      <th>Giá khớp</th>
+                      <th>Khối lượng</th>
+                      <th>Giá trị (VNĐ)</th>
+                      <th>Hành vi</th>
+                    </tr>
+                  </thead>
+                  <tbody id="intra-shark-tbody">
+                    <tr>
+                      <td colspan="5" style="text-align:center; padding:30px; color:var(--text-muted);">
+                        Chờ dữ liệu dòng tiền trong phiên...
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Put-Through trades (Negotiated) -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title"><i class="fa-solid fa-handshake"></i> Giao dịch thỏa thuận trong ngày (Put-through Tracker)</span>
+              <span style="font-size:12px; color:var(--text-muted);" id="intra-putthrough-count">Tìm thấy: -- GD</span>
+            </div>
+            <div class="card-body" style="padding:0;">
+              <div class="backtest-table-wrap" style="max-height:516px; overflow-y:auto;">
+                <table class="backtest-table">
+                  <thead>
+                    <tr>
+                      <th>Thời gian</th>
+                      <th>Giá thỏa thuận</th>
+                      <th>Khối lượng</th>
+                      <th>Giá trị (VNĐ)</th>
+                      <th>Lệch vs Sàn</th>
+                      <th>Trạng thái</th>
+                    </tr>
+                  </thead>
+                  <tbody id="intra-putthrough-tbody">
+                    <tr>
+                      <td colspan="6" style="text-align:center; padding:30px; color:var(--text-muted);">
+                        Chờ dữ liệu giao dịch thỏa thuận...
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>

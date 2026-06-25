@@ -130,13 +130,14 @@ function setupSearch() {
 
 // ===== TAB SWITCHING =====
 function switchTab(tab) {
-  const views = ['dashboard', 'candle', 'ai', 'deepsearch', 'backtest', 'scanner'];
+  const views = ['dashboard', 'candle', 'ai', 'deepsearch', 'intraday', 'backtest', 'scanner'];
   views.forEach(v => {
     $(`view-${v}`).style.display = v === tab ? 'block' : 'none';
     $(`tab-${v}`).classList.toggle('active', v === tab);
     $(`nav-${v}`)?.classList.toggle('active', v === tab);
   });
   if (tab === 'candle' && currentTicker && !candleData) loadCandle(currentTicker);
+  if (tab === 'intraday' && currentTicker) loadIntradayAndPutThrough(currentTicker);
   if (tab === 'backtest' && currentTicker) loadBacktest();
 }
 
@@ -167,6 +168,7 @@ async function loadStock(ticker) {
     // Auto reload candle if tab is open
     candleData = null;
     if ($('view-candle').style.display === 'block') loadCandle(ticker);
+    if ($('view-intraday').style.display === 'block') loadIntradayAndPutThrough(ticker);
 
   } catch (err) {
     showToast(`❌ Lỗi: ${err.message}`, 'error');
@@ -1410,6 +1412,183 @@ Hãy trả lời bằng tiếng Việt, rõ ràng và mạch lạc.`;
   }
 }
 
+
+// ===== INTRADAY & PUT-THROUGH LOGIC =====
+let intradayData = null;
+let putthroughData = null;
+
+async function loadIntradayAndPutThrough(ticker) {
+  if (!ticker) return;
+  
+  // Set loading states
+  $('intra-kpi-vol').textContent = '...';
+  $('intra-kpi-val').textContent = 'Giá trị: ...';
+  $('intra-kpi-buy-vol').textContent = '...';
+  $('intra-kpi-buy-val').textContent = 'Giá trị: ...';
+  $('intra-kpi-sell-vol').textContent = '...';
+  $('intra-kpi-sell-val').textContent = 'Giá trị: ...';
+  $('intra-kpi-net-vol').textContent = '...';
+  $('intra-kpi-net-val').textContent = 'Net value: ...';
+  $('intra-flow-buy-pct').textContent = '0%';
+  $('intra-flow-sell-pct').textContent = '0%';
+  $('intra-flow-bar').style.width = '50%';
+  $('intra-flow-verdict').textContent = 'Đang phân tích cấu trúc dòng tiền...';
+  $('intra-shark-count').textContent = 'Khớp: ...';
+  $('intra-shark-buy').textContent = '...';
+  $('intra-shark-sell').textContent = '...';
+  $('intra-shark-net').textContent = '...';
+  $('intra-shark-tbody').innerHTML = '<tr><td colspan="5" style="text-align:center; padding:30px;"><div class="spinner"></div> Đang tải dữ liệu khớp lệnh...</td></tr>';
+  $('intra-putthrough-count').textContent = 'Tìm thấy: ...';
+  $('intra-putthrough-tbody').innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px;"><div class="spinner"></div> Đang tải giao dịch thỏa thuận...</td></tr>';
+
+  try {
+    // 1. Tải Intraday
+    const intraRes = await fetch(`${API_BASE}/api/stock/${ticker}/intraday`);
+    if (intraRes.ok) {
+      intradayData = await intraRes.json();
+      renderIntradayData(intradayData);
+    } else {
+      throw new Error("Không thể kết nối API Intraday");
+    }
+
+    // 2. Tải Put-through
+    const ptRes = await fetch(`${API_BASE}/api/stock/${ticker}/put-through`);
+    if (ptRes.ok) {
+      putthroughData = await ptRes.json();
+      renderPutthroughData(putthroughData);
+    } else {
+      throw new Error("Không thể kết nối API Put-through");
+    }
+    
+    showToast(`✅ Đã cập nhật dòng tiền & thỏa thuận cho ${ticker}`, 'success');
+  } catch (err) {
+    showToast(`❌ Lỗi tải dữ liệu trong phiên: ${err.message}`, 'error');
+    $('intra-shark-tbody').innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--red); padding:20px;">Lỗi: ${err.message}</td></tr>`;
+    $('intra-putthrough-tbody').innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--red); padding:20px;">Lỗi: ${err.message}</td></tr>`;
+  }
+}
+
+function renderIntradayData(data) {
+  if (data.total_rows === 0 || !data.summary) {
+    $('intra-shark-tbody').innerHTML = '<tr><td colspan="5" style="text-align:center; padding:30px; color:var(--text-muted);">Không có dữ liệu khớp lệnh trong phiên hôm nay.</td></tr>';
+    $('intra-flow-verdict').textContent = 'Chưa có giao dịch khớp lệnh.';
+    return;
+  }
+
+  const s = data.summary;
+  const shark = data.shark_stats;
+
+  // Cập nhật KPIs
+  $('intra-kpi-vol').textContent = formatNumber(s.total_volume, 0);
+  $('intra-kpi-val').textContent = `Giá trị: ${formatNumber(s.total_value, 0)} VNĐ`;
+  
+  $('intra-kpi-buy-vol').textContent = formatNumber(s.buy_active_volume, 0);
+  $('intra-kpi-buy-val').textContent = `Giá trị: ${formatNumber(s.buy_active_value, 0)} VNĐ`;
+  
+  $('intra-kpi-sell-vol').textContent = formatNumber(s.sell_active_volume, 0);
+  $('intra-kpi-sell-val').textContent = `Giá trị: ${formatNumber(s.sell_active_value, 0)} VNĐ`;
+  
+  const netVol = s.net_active_volume;
+  const netVal = s.net_active_value;
+  const netEl = $('intra-kpi-net-vol');
+  netEl.textContent = `${netVol >= 0 ? '+' : ''}${formatNumber(netVol, 0)}`;
+  netEl.className = `kpi-value ${netVol >= 0 ? 'text-green' : 'text-red'}`;
+  $('intra-kpi-net-val').textContent = `Net value: ${netVal >= 0 ? '+' : ''}${formatNumber(netVal, 0)} VNĐ`;
+
+  // Cập nhật Flow Bar Tương quan
+  const buyPct = Math.round((s.buy_active_volume / Math.max(s.buy_active_volume + s.sell_active_volume, 1)) * 100);
+  const sellPct = 100 - buyPct;
+  $('intra-flow-buy-pct').textContent = `${buyPct}%`;
+  $('intra-flow-sell-pct').textContent = `${sellPct}%`;
+  $('intra-flow-bar').style.width = `${buyPct}%`;
+
+  // Verdict Dòng tiền
+  let verdictText = '';
+  if (buyPct >= 58) {
+    verdictText = '🔥 Dòng tiền chủ động đang GOM HÀNG quyết liệt (Lực mua áp đảo hoàn toàn)';
+  } else if (buyPct >= 52) {
+    verdictText = '🟢 Dòng tiền chủ động nghiêng nhẹ về bên MUA (Tích lũy chủ động)';
+  } else if (buyPct >= 48) {
+    verdictText = '⚪ Trạng thái cân bằng cung cầu (Sideway đi ngang)';
+  } else if (buyPct >= 42) {
+    verdictText = '🔴 Dòng tiền chủ động nghiêng về bên BÁN (Áp lực phân phối nhẹ)';
+  } else {
+    verdictText = '💥 Lực xả hàng chủ động cực mạnh (Phân phối thoát hàng quyết liệt)';
+  }
+  $('intra-flow-verdict').innerHTML = `<strong style="color:var(--text-primary);">${verdictText}</strong>`;
+
+  // Cập nhật Shark Stats
+  $('intra-shark-count').textContent = `Khớp: ${shark.total_shark_orders} lệnh`;
+  $('intra-shark-buy').textContent = formatNumber(shark.shark_buy_volume, 0);
+  $('intra-shark-sell').textContent = formatNumber(shark.shark_sell_volume, 0);
+  
+  const sharkNetVol = shark.shark_net_volume;
+  const sharkNetEl = $('intra-shark-net');
+  sharkNetEl.textContent = `${sharkNetVol >= 0 ? '+' : ''}${formatNumber(sharkNetVol, 0)} CP (${shark.shark_net_value >= 0 ? '+' : ''}${formatNumber(shark.shark_net_value, 0)} VNĐ)`;
+  sharkNetEl.className = sharkNetVol >= 0 ? 'text-green' : 'text-red';
+
+  // Render Shark Table
+  const orders = data.large_orders || [];
+  if (orders.length === 0) {
+    $('intra-shark-tbody').innerHTML = '<tr><td colspan="5" style="text-align:center; padding:35px; color:var(--text-muted);">Không phát hiện lệnh khớp quy mô lớn (Cá mập) nào trong phiên.</td></tr>';
+  } else {
+    let html = '';
+    orders.forEach(o => {
+      const isBuy = o.type === 'buy';
+      html += `
+        <tr style="background:${isBuy ? 'rgba(16,185,129,0.02)' : 'rgba(239,68,68,0.02)'};">
+          <td class="font-mono">${o.time}</td>
+          <td class="font-mono" style="font-weight:600;">${formatNumber(o.price, 2)}</td>
+          <td class="font-mono ${isBuy ? 'text-green' : 'text-red'}" style="font-weight:700;">${formatNumber(o.volume, 0)}</td>
+          <td class="font-mono">${formatNumber(o.value, 0)}</td>
+          <td><span class="signal-badge ${isBuy ? 'buy' : 'sell'}" style="font-size:10px; padding:2px 6px;">${isBuy ? 'MUA CHỦ ĐỘNG' : 'BÁN CHỦ ĐỘNG'}</span></td>
+        </tr>
+      `;
+    });
+    $('intra-shark-tbody').innerHTML = html;
+  }
+}
+
+function renderPutthroughData(data) {
+  const trades = data.trades || [];
+  $('intra-putthrough-count').textContent = `Tìm thấy: ${trades.length} GD`;
+
+  if (trades.length === 0) {
+    $('intra-putthrough-tbody').innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px; color:var(--text-muted);">Không có giao dịch thỏa thuận nào của cổ phiếu này trong ngày hôm nay.</td></tr>';
+  } else {
+    let html = '';
+    trades.forEach(t => {
+      let badgeClass = 'badge-success';
+      if (t.status.includes('Đáng ngờ')) badgeClass = 'badge-danger';
+      else if (t.status.includes('Bất thường')) badgeClass = 'badge-warning';
+
+      const diffSign = t.diff_pct >= 0 ? '+' : '';
+      const diffColor = t.diff_pct > 0 ? 'text-green' : t.diff_pct < 0 ? 'text-red' : 'var(--text-muted)';
+
+      html += `
+        <tr>
+          <td class="font-mono">${t.time}</td>
+          <td class="font-mono" style="font-weight:600;">${formatNumber(t.price, 2)}</td>
+          <td class="font-mono" style="font-weight:600;">${formatNumber(t.volume, 0)}</td>
+          <td class="font-mono" style="color:var(--text-secondary);">${formatNumber(t.value, 0)}</td>
+          <td class="font-mono ${diffColor}" style="font-weight:600;">${diffSign}${t.diff_pct}%</td>
+          <td>
+            <span class="${badgeClass}" title="Lý do: ${t.anomaly_reason}">${t.status}</span>
+          </td>
+        </tr>
+      `;
+    });
+    $('intra-putthrough-tbody').innerHTML = html;
+  }
+}
+
+function refreshIntradayData() {
+  if (currentTicker) {
+    loadIntradayAndPutThrough(currentTicker);
+  } else {
+    showToast('Vui lòng tìm kiếm mã cổ phiếu trước!', 'error');
+  }
+}
 
 // ===== WINDOW RESIZE =====
 window.addEventListener('resize', () => {
