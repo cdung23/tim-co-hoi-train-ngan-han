@@ -453,62 +453,175 @@ def run_market_scanner(strategy: str = "multi_signal_buy", threshold: int = 3):
     }
 
 
-@app.get("/api/news/{ticker}")
-def get_stock_news(ticker: str):
-    """
-    Cào tối đa 8 tin tức mới nhất của cổ phiếu từ CafeF
-    """
+TICKER_MAP = {
+    "GEX": "Gelex",
+    "VIX": "VIX",
+    "HPG": "Hòa Phát",
+    "MBB": "Ngân hàng Quân đội",
+    "MWG": "Thế giới Di động",
+    "FPT": "FPT",
+    "VND": "VNDirect",
+    "DIG": "DIC Corp",
+    "DXG": "Đất Xanh",
+    "CEO": "Tập đoàn CEO",
+    "NVL": "Novaland",
+    "PDR": "Phát Đạt",
+    "HSG": "Hoa Sen",
+    "NKG": "Nam Kim",
+    "VCG": "Vinaconex",
+    "KBC": "Kinh Bắc",
+    "DGC": "Hóa chất Đức Giang",
+    "PVD": "Khoan Dầu khí",
+    "PVS": "Dịch vụ Dầu khí",
+    "HHV": "Hạ tầng Giao thông Đèo Cả",
+    "LCG": "Lizen",
+    "ANV": "Nam Việt",
+    "VHC": "Vĩnh Hoàn",
+    "DCM": "Phân bón Dầu khí Cà Mau",
+    "ACB": "Ngân hàng Á Châu",
+    "BCM": "Becamex",
+    "BID": "BIDV",
+    "BVH": "Bảo Việt",
+    "CTG": "VietinBank",
+    "GAS": "PV Gas",
+    "GVR": "Cao su Việt Nam",
+    "HDB": "HDBank",
+    "MSN": "Masan",
+    "PLX": "Petrolimex",
+    "POW": "PV Power",
+    "SAB": "Sabeco",
+    "SHB": "Ngân hàng SHB",
+    "SSB": "SeABank",
+    "SSI": "Chứng khoán SSI",
+    "STB": "Sacombank",
+    "TCB": "Techcombank",
+    "TPB": "TPBank",
+    "VCB": "Vietcombank",
+    "VHM": "Vinhomes",
+    "VIB": "Ngân hàng VIB",
+    "VIC": "Vingroup",
+    "VJC": "Vietjet",
+    "VNM": "Vinamilk",
+    "VPB": "VPBank",
+    "VRE": "Vincom Retail"
+}
+
+def extract_date_from_url(url: str):
+    import re
+    # Thử tìm chuỗi số liên tục độ dài 8 chữ số dạng YYYYMMDD (ví dụ: 20260625)
+    match = re.search(r'-(\d{8})\d*\.chn', url)
+    if match:
+        date_str = match.group(1)
+        try:
+            return datetime.strptime(date_str, "%Y%m%d")
+        except ValueError:
+            pass
+            
+    # Thử tìm định dạng Solr cũ của CafeF: chứa 188 và theo sau là 6 chữ số ngày YYMMDD
+    # Ví dụ: -188260605...chn -> 260605 -> 05/06/2026
+    match_solr = re.search(r'-188(\d{6})\d*\.chn', url)
+    if match_solr:
+        date_str = match_solr.group(1)
+        try:
+            return datetime.strptime(f"20{date_str}", "%Y%m%d")
+        except ValueError:
+            pass
+            
+    # Nếu không tìm thấy, thử tìm bất kỳ chuỗi 8 chữ số nào có dạng YYYYMMDD
+    match_any = re.search(r'\b(20[1-3]\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\b', url)
+    if match_any:
+        try:
+            return datetime(int(match_any.group(1)), int(match_any.group(2)), int(match_any.group(3)))
+        except ValueError:
+            pass
+            
+    # Mặc định trả về ngày cũ nhất
+    return datetime(2020, 1, 1)
+
+def scrape_cafef_keyword(term: str):
     import requests
     from bs4 import BeautifulSoup
-    
-    ticker = ticker.upper().strip()
-    url = f"https://cafef.vn/tim-kiem.chn?keywords={ticker}"
+    url = f"https://cafef.vn/tim-kiem.chn?keywords={term}"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
-    
+    items = []
     try:
         response = requests.get(url, headers=headers, timeout=10)
-        if response.status_code != 200:
-            return {"status": "error", "message": f"CafeF returned status {response.status_code}", "news": []}
-            
-        soup = BeautifulSoup(response.text, "html.parser")
-        news_items = []
-        seen_urls = set()
-        
-        for element in soup.find_all(["li", "div"]):
-            a_tag = element.find("a")
-            if a_tag and a_tag.get("href") and (".chn" in a_tag.get("href")):
-                href = a_tag.get("href")
-                if not href.startswith("http"):
-                    href = f"https://cafef.vn{href}"
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, "html.parser")
+            for element in soup.find_all(["li", "div"]):
+                a_tag = element.find("a")
+                if a_tag and a_tag.get("href") and (".chn" in a_tag.get("href")):
+                    href = a_tag.get("href")
+                    if not href.startswith("http"):
+                        href = f"https://cafef.vn{href}"
+                        
+                    if "tim-kiem.chn" in href:
+                        continue
+                        
+                    title = a_tag.get("title") or a_tag.text.strip()
+                    if len(title) < 20:
+                        continue
+                        
+                    sapo = ""
+                    sapo_tag = element.find(class_="sapo") or element.find(class_="desc")
+                    if sapo_tag:
+                        sapo = sapo_tag.text.strip()
                     
-                if "tim-kiem.chn" in href or href in seen_urls:
-                    continue
-                    
-                title = a_tag.get("title") or a_tag.text.strip()
-                if len(title) < 20:
-                    continue
-                    
-                sapo = ""
-                sapo_tag = element.find(class_="sapo") or element.find(class_="desc")
-                if sapo_tag:
-                    sapo = sapo_tag.text.strip()
-                
-                seen_urls.add(href)
-                news_items.append({
-                    "title": title,
-                    "url": href,
-                    "sapo": sapo
-                })
-                
-                if len(news_items) >= 8:
-                    break
-                    
-        return {"status": "success", "ticker": ticker, "news": news_items}
-        
+                    items.append({
+                        "title": title,
+                        "url": href,
+                        "sapo": sapo
+                    })
     except Exception as e:
-        return {"status": "error", "message": str(e), "news": []}
+        print(f"[News Scraper] Lỗi cào từ khóa '{term}': {str(e)}")
+    return items
+
+@app.get("/api/news/{ticker}")
+def get_stock_news(ticker: str):
+    """
+    Cào tối đa 8 tin tức mới nhất của cổ phiếu từ CafeF theo cơ chế cào kép (ticker + tiếng Việt) và lọc/sắp xếp theo ngày
+    """
+    ticker = ticker.upper().strip()
+    keywords = [ticker]
+    if ticker in TICKER_MAP:
+        keywords.append(TICKER_MAP[ticker])
+        
+    all_news = []
+    seen_urls = set()
+    
+    for kw in keywords:
+        kw_news = scrape_cafef_keyword(kw)
+        for item in kw_news:
+            url = item["url"]
+            if url not in seen_urls:
+                seen_urls.add(url)
+                # Trích xuất ngày đăng
+                pub_date = extract_date_from_url(url)
+                item["pub_date"] = pub_date
+                # Lưu trữ chuỗi ngày hiển thị
+                item["date_str"] = pub_date.strftime("%d/%m/%Y") if pub_date.year > 2020 else "N/A"
+                all_news.append(item)
+                
+    # Sắp xếp giảm dần theo pub_date
+    all_news.sort(key=lambda x: x["pub_date"], reverse=True)
+    
+    # Lấy tối đa 8 tin tức mới nhất
+    latest_news = all_news[:8]
+    
+    # Loại bỏ object datetime để tránh lỗi JSON serialization của FastAPI
+    cleaned_news = []
+    for item in latest_news:
+        cleaned_news.append({
+            "title": item["title"],
+            "url": item["url"],
+            "sapo": item["sapo"],
+            "date": item["date_str"]
+        })
+        
+    return {"status": "success", "ticker": ticker, "news": cleaned_news}
+
 
 
 if __name__ == "__main__":
