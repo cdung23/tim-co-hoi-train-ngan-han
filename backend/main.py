@@ -453,8 +453,62 @@ def run_market_scanner(strategy: str = "multi_signal_buy", threshold: int = 3):
     }
 
 
-
-
+@app.get("/api/news/{ticker}")
+def get_stock_news(ticker: str):
+    """
+    Cào tối đa 8 tin tức mới nhất của cổ phiếu từ CafeF
+    """
+    import requests
+    from bs4 import BeautifulSoup
+    
+    ticker = ticker.upper().strip()
+    url = f"https://cafef.vn/tim-kiem.chn?keywords={ticker}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        if response.status_code != 200:
+            return {"status": "error", "message": f"CafeF returned status {response.status_code}", "news": []}
+            
+        soup = BeautifulSoup(response.text, "html.parser")
+        news_items = []
+        seen_urls = set()
+        
+        for element in soup.find_all(["li", "div"]):
+            a_tag = element.find("a")
+            if a_tag and a_tag.get("href") and (".chn" in a_tag.get("href")):
+                href = a_tag.get("href")
+                if not href.startswith("http"):
+                    href = f"https://cafef.vn{href}"
+                    
+                if "tim-kiem.chn" in href or href in seen_urls:
+                    continue
+                    
+                title = a_tag.get("title") or a_tag.text.strip()
+                if len(title) < 20:
+                    continue
+                    
+                sapo = ""
+                sapo_tag = element.find(class_="sapo") or element.find(class_="desc")
+                if sapo_tag:
+                    sapo = sapo_tag.text.strip()
+                
+                seen_urls.add(href)
+                news_items.append({
+                    "title": title,
+                    "url": href,
+                    "sapo": sapo
+                })
+                
+                if len(news_items) >= 8:
+                    break
+                    
+        return {"status": "success", "ticker": ticker, "news": news_items}
+        
+    except Exception as e:
+        return {"status": "error", "message": str(e), "news": []}
 
 
 if __name__ == "__main__":
