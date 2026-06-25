@@ -130,13 +130,12 @@ function setupSearch() {
 
 // ===== TAB SWITCHING =====
 function switchTab(tab) {
-  const views = ['dashboard', 'candle', 'ai', 'deepsearch', 'intraday', 'backtest', 'scanner'];
+  const views = ['dashboard', 'deepsearch', 'intraday', 'backtest', 'scanner'];
   views.forEach(v => {
     $(`view-${v}`).style.display = v === tab ? 'block' : 'none';
     $(`tab-${v}`).classList.toggle('active', v === tab);
     $(`nav-${v}`)?.classList.toggle('active', v === tab);
   });
-  if (tab === 'candle' && currentTicker && !candleData) loadCandle(currentTicker);
   if (tab === 'intraday' && currentTicker) loadIntradayAndPutThrough(currentTicker);
   if (tab === 'backtest' && currentTicker) loadBacktest();
 }
@@ -165,9 +164,6 @@ async function loadStock(ticker) {
 
     showToast(`✅ Đã tải dữ liệu ${ticker} (${stockData.total_days} phiên)`, 'success');
 
-    // Auto reload candle if tab is open
-    candleData = null;
-    if ($('view-candle').style.display === 'block') loadCandle(ticker);
     if ($('view-intraday').style.display === 'block') loadIntradayAndPutThrough(ticker);
 
   } catch (err) {
@@ -532,54 +528,7 @@ function setSubChart(type) {
   }
 }
 
-// ===== CANDLESTICK PATTERNS =====
-async function loadCandle(ticker) {
-  $('candle-patterns').innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:30px;"><div class="spinner"></div><br/>Đang phân tích nến...</div>';
-  try {
-    const res = await fetch(`${API_BASE}/api/candle/${ticker}`);
-    candleData = await res.json();
-    renderCandlePatterns(candleData);
-    renderRecentCandles(candleData);
-  } catch (err) {
-    $('candle-patterns').innerHTML = `<div style="color:var(--red);text-align:center;padding:20px;">Lỗi: ${err.message}</div>`;
-  }
-}
 
-function renderCandlePatterns(data) {
-  const { patterns } = data;
-  let html = '';
-  patterns.forEach(p => {
-    const confClass = p.confidence === 'Cao' ? 'conf-high' : p.confidence === 'Trung bình' ? 'conf-mid' : 'conf-low';
-    html += `
-      <div class="pattern-card">
-        <div class="pattern-emoji">${p.emoji}</div>
-        <div>
-          <div class="pattern-name ${p.type}">${p.name}</div>
-          <div class="pattern-desc">${p.description}</div>
-          <span class="pattern-confidence ${confClass}">Độ tin cậy: ${p.confidence}</span>
-        </div>
-      </div>`;
-  });
-  $('candle-patterns').innerHTML = html;
-}
-
-function renderRecentCandles(data) {
-  const { recent_candles } = data;
-  let html = `<div style="display:flex;flex-direction:column;gap:8px;">`;
-  recent_candles.forEach(c => {
-    const isGreen = c.close >= c.open;
-    html += `
-      <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg-input);border-radius:6px;border:1px solid var(--border);">
-        <span style="width:12px;height:12px;border-radius:3px;background:${isGreen ? 'var(--green)' : 'var(--red)'};flex-shrink:0;"></span>
-        <div style="flex:1;">
-          <div style="font-size:12px;color:var(--text-secondary);">${c.date} — <span class="font-mono" style="color:${isGreen ? 'var(--green)' : 'var(--red)'};">${c.description}</span></div>
-          <div style="font-size:11px;color:var(--text-muted);font-family:'JetBrains Mono',monospace;">O:${formatNumber(c.open, 2)} H:${formatNumber(c.high, 2)} L:${formatNumber(c.low, 2)} C:${formatNumber(c.close, 2)} | Vol:${formatNumber(c.volume/1000, 0)}K</div>
-        </div>
-      </div>`;
-  });
-  html += '</div>';
-  $('recent-candles-body').innerHTML = html;
-}
 
 // ===== BACK-TESTING =====
 async function loadBacktest() {
@@ -821,166 +770,7 @@ async function loadBacktest() {
   }
 }
 
-// ===== AI ANALYSIS — GEMINI =====
-function buildPrompt() {
-  if (!stockData) return '';
-  const { analysis, ticker, last_date, support, resistance } = stockData;
-  const { price, price_change, price_change_pct, signals } = analysis;
-  const macd = signals.macd || {};
-  const ma = signals.ma || {};
-  const bb = signals.bb || {};
-  const vol = signals.volume || {};
 
-  return `Bạn là Chuyên gia Phân tích Kỹ thuật Cổ phiếu cấp cao (Senior Technical Analyst) với hơn 15 năm kinh nghiệm tại thị trường chứng khoán Việt Nam. 
-HÃY VIẾT PHÂN TÍCH CỰC KỲ CÔ ĐỌNG, đi thẳng vào số liệu thực tế của cổ phiếu, không giải thích lý thuyết các chỉ báo kỹ thuật. Giới hạn phân tích mỗi bước từ 1 đến 6 trong tối đa 3 câu ngắn gọn nhưng cực kỳ chuyên sâu và chính xác. Điều này để đảm bảo câu trả lời đầy đủ, không bị cắt cụt.
-
-## DỮ LIỆU CỔ PHIẾU
-
-<stock_info>
-Mã: ${ticker} | Ngày: ${last_date}
-Giá đóng cửa: ${price} | Thay đổi: ${price_change >= 0 ? '+' : ''}${price_change} (${price_change_pct}%)
-Hỗ trợ: ${support} | Kháng cự: ${resistance}
-</stock_info>
-
-<indicators>
-MA10: ${ma.ma10 || 'N/A'} | MA50: ${ma.ma50 || 'N/A'} | Xu hướng MA: ${ma.label || 'N/A'}
-MACD Line: ${macd.macd || 'N/A'} | Signal: ${macd.signal_line || 'N/A'} | Histogram: ${macd.histogram || 'N/A'} → ${macd.label || 'N/A'}
-BB Upper: ${bb.upper || 'N/A'} | BB Middle: ${bb.middle || 'N/A'} | BB Lower: ${bb.lower || 'N/A'} | BW: ${bb.bandwidth || 'N/A'}% → ${bb.label || 'N/A'}
-Volume hôm nay: ${vol.today ? (vol.today/1000).toFixed(0)+'K' : 'N/A'} | TB20: ${vol.ma20 ? (vol.ma20/1000).toFixed(0)+'K' : 'N/A'} | Tỷ lệ: ${vol.ratio || 'N/A'}× → ${vol.label || 'N/A'}
-</indicators>
-
-## NHIỆM VỤ — PHÂN TÍCH 7 BƯỚC
-
-Kết thúc mỗi bước bằng: **→ Tín hiệu: [🟢 Tích cực / 🔴 Tiêu cực / ⚪ Trung lập] — Lý do 1 câu ngắn**
-
-**BƯỚC 1 — Giá & Xu hướng:** Xác định Uptrend/Downtrend/Sideway, vùng S/R gần nhất, cấu trúc giá (Higher High / Lower High).
-
-**BƯỚC 2 — Mô hình Nến Nhật:** Nhận diện mô hình nến 3-5 phiên gần nhất, đánh giá độ tin cậy (vị trí S/R + volume).
-
-**BƯỚC 3 — Phân tích Volume:** So sánh với TB20, nhận định Tích lũy hay Phân phối.
-
-**BƯỚC 4 — MA10 & MA50:** Vị trí giá so với MA, Golden/Death Cross, khoảng cách mean reversion.
-
-**BƯỚC 5 — MACD:** Vị trí Line vs Signal, momentum histogram, phân kỳ MACD-Giá.
-
-**BƯỚC 6 — Bollinger Bands:** Vị trí trong dải, Squeeze (bandwidth <5%), nguy cơ breakout.
-
-**BƯỚC 7 — Bảng đồng thuận chỉ báo:** Lập bảng 4 chỉ báo (MACD, MA, BB, Volume) × [🟢/🔴/⚪] với độ trễ so với giá, kết luận tổng hợp.
-
-## KẾT LUẬN & PHƯƠNG ÁN GIAO DỊCH
-
-Đưa ra bảng 3 kịch bản (Markdown table):
-| Kịch bản | Điều kiện | Hành động | Vào lệnh | SL | TP1 | TP2 | R:R |
-
-**KHUYẾN NGHỊ:** [MUA/BÁN/CHỜ] — Mức độ tự tin: [Cao/Trung bình/Thấp]
-
-Trả lời bằng **tiếng Việt**, rõ ràng, chuyên nghiệp. Nếu thiếu dữ liệu, ghi "⚠️ Cần bổ sung" thay vì suy đoán.`;
-}
-
-async function runAIAnalysis() {
-  const key = getGeminiKey();
-  if (!key) { showToast('Vui lòng nhập Gemini API Key ở sidebar!', 'error'); return; }
-  if (!stockData) { showToast('Vui lòng tìm kiếm mã cổ phiếu trước!', 'error'); return; }
-
-  const btn = $('btn-analyze');
-  btn.disabled = true;
-  btn.innerHTML = '<div class="spinner"></div> Đang phân tích...';
-
-  const output = $('ai-output');
-  output.className = 'ai-output streaming';
-  output.innerHTML = '<div style="color:var(--blue-bright); margin-bottom:8px;"><div class="spinner" style="display:inline-block;margin-right:8px;"></div>Gemini đang phân tích 7 bước...</div>';
-
-  const prompt = buildPrompt();
-  const model = $('gemini-model-select').value || 'gemini-3.5-flash';
-  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent`;
-
-  try {
-    const response = await fetch(`${apiUrl}?key=${key}&alt=sse`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.4,
-          maxOutputTokens: 8192,
-        }
-      })
-    });
-
-    if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.error?.message || 'Lỗi Gemini API');
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let fullText = '';
-    output.innerHTML = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const chunk = decoder.decode(value);
-      const lines = chunk.split('\n');
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          try {
-            const json = JSON.parse(line.slice(6));
-            const part = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            fullText += part;
-            output.innerHTML = marked.parse(fullText) + '<span class="pulse" style="display:inline-block;width:8px;height:14px;background:var(--blue);border-radius:2px;margin-left:2px;vertical-align:middle;"></span>';
-            output.scrollTop = output.scrollHeight;
-          } catch {}
-        }
-      }
-    }
-
-    output.innerHTML = marked.parse(fullText);
-    showToast('✅ Phân tích AI hoàn tất!', 'success');
-
-  } catch (err) {
-    output.innerHTML = `<div style="color:var(--red);padding:10px;background:rgba(239,68,68,0.08);border-radius:6px;">
-      ❌ <strong>Lỗi Gemini API:</strong> ${err.message}<br/>
-      <small style="color:var(--text-muted);">Kiểm tra lại API Key và kết nối internet.</small>
-    </div>`;
-    showToast(`Lỗi: ${err.message}`, 'error');
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = '<i class="fa-solid fa-sparkles"></i> Phân tích toàn diện';
-  }
-}
-
-function markdownToHtml(md) {
-  return md
-    .replace(/^## (.*$)/gim, '<h3 style="color:var(--blue-bright);margin:14px 0 6px;font-size:13px;border-bottom:1px solid var(--border);padding-bottom:4px;">$1</h3>')
-    .replace(/^### (.*$)/gim, '<h4 style="color:var(--text-primary);margin:10px 0 4px;font-size:12px;">$1</h4>')
-    .replace(/\*\*(.*?)\*\*/g, '<strong style="color:var(--text-primary);">$1</strong>')
-    .replace(/🟢/g, '<span class="text-green">🟢</span>')
-    .replace(/🔴/g, '<span class="text-red">🔴</span>')
-    .replace(/→ Tín hiệu:/g, '<br/><span style="color:var(--amber);">→ Tín hiệu:</span>')
-    .replace(/^\| (.*)/gim, (match) => {
-      if (match.includes('---')) return '';
-      const cells = match.split('|').filter(c => c.trim());
-      const isHeader = /Kịch bản|BƯỚC|Chỉ báo/.test(cells[0]);
-      const tag = isHeader ? 'th' : 'td';
-      return `<tr>${cells.map(c => `<${tag} style="padding:6px 10px;border-bottom:1px solid var(--border);font-size:12px;">${c.trim()}</${tag}>`).join('')}</tr>`;
-    })
-    .replace(/(<tr>.*<\/tr>)/gms, (m) => {
-      if (!m.includes('<table>')) return `<div style="overflow-x:auto;margin:8px 0;"><table style="width:100%;border-collapse:collapse;font-size:12px;background:var(--bg-input);border-radius:6px;overflow:hidden;">${m}</table></div>`;
-      return m;
-    })
-    .replace(/^- (.*$)/gim, '<div style="padding:2px 0 2px 12px;border-left:2px solid var(--blue);margin:3px 0;font-size:12.5px;color:var(--text-secondary);">$1</div>')
-    .replace(/\n\n/g, '<br/>')
-    .replace(/\n/g, '<br/>');
-}
-
-function copyPrompt() {
-  const prompt = buildPrompt();
-  if (!prompt) { showToast('Tìm kiếm mã cổ phiếu trước!', 'error'); return; }
-  navigator.clipboard.writeText(prompt).then(() => {
-    showToast('✅ Đã copy prompt vào clipboard!', 'success');
-  });
-}
 
 // ===== TOAST =====
 function showToast(message, type = 'info') {

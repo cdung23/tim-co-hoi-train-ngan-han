@@ -49,12 +49,6 @@
       <div class="nav-item active" id="nav-dashboard" onclick="switchTab('dashboard')">
         <i class="fa-solid fa-chart-line"></i> Tổng quan
       </div>
-      <div class="nav-item" id="nav-candle" onclick="switchTab('candle')">
-        <i class="fa-solid fa-candlestick-chart"></i> Nến Nhật
-      </div>
-      <div class="nav-item" id="nav-ai" onclick="switchTab('ai')">
-        <i class="fa-solid fa-robot"></i> AI Phân tích
-      </div>
       <div class="nav-item" id="nav-deepsearch" onclick="switchTab('deepsearch')">
         <i class="fa-solid fa-graduation-cap"></i> Deep Research
       </div>
@@ -117,12 +111,6 @@
     <div class="tab-bar">
       <button class="tab-btn active" id="tab-dashboard" onclick="switchTab('dashboard')">
         <i class="fa-solid fa-gauge-high"></i> Tổng quan
-      </button>
-      <button class="tab-btn" id="tab-candle" onclick="switchTab('candle')">
-        <i class="fa-solid fa-fire"></i> Nến Nhật
-      </button>
-      <button class="tab-btn" id="tab-ai" onclick="switchTab('ai')">
-        <i class="fa-solid fa-robot"></i> AI Phân tích
       </button>
       <button class="tab-btn" id="tab-deepsearch" onclick="switchTab('deepsearch')">
         <i class="fa-solid fa-graduation-cap"></i> Deep Research
@@ -252,69 +240,6 @@
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ====== TAB: NẾN NHẬT ====== -->
-      <div id="view-candle" style="display:none;" class="fade-in">
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
-          <div class="card">
-            <div class="card-header">
-              <span class="card-title"><i class="fa-solid fa-fire"></i> Mô hình nến được phát hiện</span>
-            </div>
-            <div class="card-body">
-              <div class="candle-patterns" id="candle-patterns">
-                <div style="color:var(--text-muted); text-align:center; padding:30px;">
-                  Tìm kiếm mã cổ phiếu để phân tích nến Nhật
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-header">
-              <span class="card-title"><i class="fa-solid fa-list"></i> 5 nến gần nhất</span>
-            </div>
-            <div class="card-body" id="recent-candles-body">
-              <div style="color:var(--text-muted); text-align:center; padding:30px;">
-                Chờ dữ liệu...
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ====== TAB: AI ANALYSIS ====== -->
-      <div id="view-ai" style="display:none;" class="fade-in">
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title"><i class="fa-solid fa-robot"></i> Phân tích AI 7 bước — Gemini</span>
-            <div style="display:flex; gap:8px;">
-              <button class="btn-copy-prompt" id="btn-copy-prompt" onclick="copyPrompt()">
-                <i class="fa-solid fa-copy"></i> Copy Prompt
-              </button>
-              <button class="btn-analyze" id="btn-analyze" onclick="runAIAnalysis()">
-                <i class="fa-solid fa-sparkles"></i> Phân tích toàn diện
-              </button>
-            </div>
-          </div>
-          <div class="card-body">
-            <div class="ai-output" id="ai-output">
-              <div class="ai-placeholder">
-                <i class="fa-solid fa-robot"></i>
-                <div style="font-size:14px; font-weight:500; color:var(--text-secondary);">
-                  Sẵn sàng phân tích
-                </div>
-                <div style="font-size:12px; color:var(--text-muted); max-width:400px; line-height:1.6;">
-                  1. Nhập Gemini API Key ở sidebar bên trái<br/>
-                  2. Tìm kiếm mã cổ phiếu<br/>
-                  3. Bấm "Phân tích toàn diện" để AI phân tích 7 bước
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
 
       <!-- ====== TAB: BACK-TESTING ====== -->
       <div id="view-backtest" style="display:none;" class="fade-in">

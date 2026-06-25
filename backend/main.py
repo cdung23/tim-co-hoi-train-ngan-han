@@ -25,7 +25,6 @@ import pandas as pd
 import traceback
 
 from indicators import calc_all_indicators, get_support_resistance
-from candlestick import detect_patterns, get_recent_candles_description
 from backtest import run_backtest
 
 app = FastAPI(
@@ -297,29 +296,7 @@ def get_stock_analysis(ticker: str):
         raise HTTPException(status_code=500, detail=f"Lỗi phân tích: {str(e)}")
 
 
-@app.get("/api/candle/{ticker}")
-def get_candlestick_patterns(ticker: str):
-    """
-    Nhận diện mô hình nến Nhật từ 5 phiên gần nhất
-    """
-    try:
-        df = fetch_ohlcv(ticker, months=3)
-        support, resistance = get_support_resistance(df)
-        patterns = detect_patterns(df, support=support, resistance=resistance)
-        recent_candles = get_recent_candles_description(df, n=5)
 
-        return {
-            'ticker': ticker.upper(),
-            'patterns': patterns,
-            'recent_candles': recent_candles,
-            'support': support,
-            'resistance': resistance
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Lỗi phân tích nến: {str(e)}")
 
 
 @app.get("/api/backtest/{ticker}")
