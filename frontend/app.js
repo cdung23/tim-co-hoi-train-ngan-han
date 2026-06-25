@@ -655,7 +655,7 @@ async function loadBacktest() {
     $('bt-signals').textContent = formatNumber(data.valid_signals, 0);
 
     // Build summary text
-    const mainP = strategy === 'macd_hist_bearish_surge' ? '5d' : (strategy === 'optimal_induction' ? '15d_dynamic' : (strategy === 'rsi_divergence_combo' || strategy === 'rsi_divergence_pure' ? '20d' : '10d'));
+    const mainP = strategy === 'macd_hist_bearish_surge' ? '5d' : (strategy === 'optimal_induction' ? '15d_dynamic' : '10d');
     const labelP = strategy === 'optimal_induction' ? 'Động (15d)' : `đại diện (${mainP})`;
     const totalWins = stats[`win_count_${mainP}`] || 0;
     const totalLosses = stats[`loss_count_${mainP}`] || 0;
@@ -723,7 +723,7 @@ async function loadBacktest() {
           resultLabel = `<span class="${isWin ? 'text-green' : 'text-red'}" style="font-weight:600;">${isWin ? '✅' : '❌'} ${status} (${isWin ? '+' : ''}${formatNumber(resVal, 2)}%)</span>`;
         }
       } else {
-        const targetPct = strategy === 'macd_hist_bearish_surge' ? r.pct_5d : (strategy === 'rsi_divergence_combo' || strategy === 'rsi_divergence_pure' ? r.pct_20d : r.pct_10d);
+        const targetPct = strategy === 'macd_hist_bearish_surge' ? r.pct_5d : r.pct_10d;
         if (targetPct === null || targetPct === undefined) {
           resultLabel = '<span style="color:var(--text-muted);">⏳ Chờ</span>';
         } else {
@@ -738,10 +738,6 @@ async function loadBacktest() {
       let badgeLabel = '';
       if (strategy === 'macd_hist_bearish_surge') {
         badgeLabel = '<span style="background:rgba(239,68,68,0.15);color:var(--red);padding:2px 7px;border-radius:4px;font-size:11px;">🔴 Bearish Surge</span>';
-      } else if (strategy === 'rsi_divergence_pure') {
-        badgeLabel = '<span style="background:rgba(6,182,212,0.15);color:var(--cyan);padding:2px 7px;border-radius:4px;font-size:11px;">🔵 Phân kỳ RSI</span>';
-      } else if (strategy === 'rsi_divergence_combo') {
-        badgeLabel = '<span style="background:rgba(168,85,247,0.15);color:var(--purple);padding:2px 7px;border-radius:4px;font-size:11px;font-weight:700;"><i class="fa-solid fa-crown" style="margin-right:3px;"></i>Combo RSI Tối ưu</span>';
       } else if (strategy === 'optimal_induction') {
         badgeLabel = '<span style="background:rgba(16,185,129,0.15);color:var(--green);padding:2px 7px;border-radius:4px;font-size:11px;font-weight:700;"><i class="fa-solid fa-bolt" style="margin-right:3px;"></i>Pro V5 Squeezed</span>';
       } else if (strategy === 'weighted_score') {
@@ -900,16 +896,6 @@ async function runMarketScan() {
           detailLabel = 'Histogram chuyển màu (Đỏ nhạt → Đỏ đậm) + Vol đột biến &ge; 1,1x TB20';
           recommendation = '🟢 MUA (Đảo chiều sớm)';
           recommendationClass = 'buy';
-        } else if (strategy === 'rsi_divergence_pure') {
-          strategyLabel = '<span style="color:#06b6d4;font-weight:600;"><i class="fa-solid fa-chart-line" style="margin-right:4px;"></i>Phân kỳ RSI</span>';
-          detailLabel = 'Phát hiện Phân kỳ dương RSI (RSI Bullish Divergence) vùng quá bán < 40';
-          recommendation = '🟢 MUA (Theo dõi đảo chiều)';
-          recommendationClass = 'buy';
-        } else if (strategy === 'rsi_divergence_combo') {
-          strategyLabel = '<span style="color:#a855f7;font-weight:600;"><i class="fa-solid fa-crown" style="margin-right:4px;"></i>Combo RSI Tối ưu</span>';
-          detailLabel = 'Phân kỳ dương RSI + Vol bùng nổ &ge; 1,15x TB20 + Nến đảo chiều xanh/búa';
-          recommendation = '🏆 MUA MẠNH (Tỷ lệ thắng 70%)';
-          recommendationClass = 'strong';
         } else {
           strategyLabel = '<span style="color:#8b5cf6;font-weight:600;"><i class="fa-solid fa-list-check" style="margin-right:4px;"></i>Đồng thuận chỉ báo</span>';
           
